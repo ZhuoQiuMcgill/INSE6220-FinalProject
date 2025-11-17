@@ -8,6 +8,8 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+WARP.md
+.idea
 build/
 develop-eggs/
 dist/

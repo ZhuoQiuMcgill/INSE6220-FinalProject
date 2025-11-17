@@ -1,0 +1,9 @@
+We use the Kepler KOI cumulative table provided by the NASA Exoplanet Archive. The table aggregates KOIs across Kepler data releases and includes target metadata, transit parameters, and vetting outcomes. Our working dataset is derived by:
+\begin{itemize}
+  \item Selecting physically meaningful attributes such as orbital period, transit depth, transit duration, transit signal-to-noise ratio, and representative stellar parameters (e.g., effective temperature, surface gravity, radius) where available.
+  \item Excluding outcome variables that would leak labels (e.g., koi\_disposition) from the predictor set; the target is koi\_score.
+  \item Handling missing values using simple imputation strategies (e.g., median for continuous features) and removing records with insufficient information after imputation attempts.
+  \item Standardizing numeric features prior to PCA and model training.
+\end{itemize}
+
+We report basic descriptive statistics for the target and predictors (e.g., distributions and ranges) and consider simple correlation checks. Because KOI coverage and completeness can vary by release, we treat all statistics as descriptive rather than definitive. The resulting cleaned dataset balances retention of samples with the need for consistent feature availability across records.

@@ -1,0 +1,5 @@
+We implement preprocessing, PCA, and regression models in Python using scikit-learn and standard scientific packages. Unless otherwise noted, we use a stratified or random 80/20 train/test split with a fixed seed to aid reproducibility. Continuous features are standardized based on training-set statistics.
+
+For PCA, we retain the smallest number of components that achieves a target explained-variance threshold (e.g., 90\%); we also inspect scree plots to confirm the knee point. For linear regression, we consider ordinary least squares (and optionally ridge with a modest regularization coefficient if needed). For the MLP regressor, we prototype shallow to moderately deep networks (e.g., 1--3 hidden layers, tens to low hundreds of units), ReLU activations, Adam optimizer, early stopping, and mild $\ell_2$ regularization. Hyperparameters are selected by simple grid or randomized search over the training set.
+
+We track runtime and memory qualitatively to ensure the pipeline remains lightweight and practical for iterative vetting support.

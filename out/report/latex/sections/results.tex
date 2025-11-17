@@ -1,0 +1,7 @@
+\subsection{PCA Results}
+We summarize PCA outcomes, including a scree plot and cumulative explained variance. Loadings for the leading components are examined to contextualize their physical meaning (e.g., components dominated by transit depth and duration versus stellar parameters). Where possible, we provide brief interpretations of the first few components.
+
+\subsection{Regression Results}
+We compare regression performance across feature pipelines and models. For each model (linear regression, MLP), we report R$^2$, MSE, RMSE, and MAE on the test set using (i) original standardized features and (ii) PCA components. Predicted versus true koi\_score scatter plots and residual distributions help diagnose calibration and potential systematic biases (e.g., underestimation near the high-confidence regime).
+
+If available, we include ablation analyses (e.g., component count sensitivity) and brief runtime comparisons to illustrate the trade-offs between simplicity and accuracy.

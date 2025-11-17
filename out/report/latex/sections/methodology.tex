@@ -1,0 +1,11 @@
+\subsection{Principal Component Analysis}
+Principal Component Analysis (PCA) is applied to standardized numeric features to reduce dimensionality, remove linear dependencies, and obtain orthogonal components. We select the number of components by cumulative explained variance (e.g., retaining the smallest number of components that accounts for a target fraction of variance). PCA facilitates interpretation via loadings---highlighting which original attributes drive each principal component---and can improve conditioning for linear models.
+
+\subsection{Regression and Machine Learning Models}
+We frame koi\_score prediction as a supervised regression problem. We consider two families of models:
+\begin{itemize}
+  \item \textbf{Linear Regression}: a simple baseline that benefits from PCA when multicollinearity is present.
+  \item \textbf{Multilayer Perceptron (MLP)}: a feedforward neural network that can model non-linear relationships. We tune depth, width, activation functions, and regularization.
+\end{itemize}
+
+We evaluate two feature pipelines for each model: (i) original standardized features and (ii) PCA components. Data are split into training and test partitions (e.g., 80/20) with a fixed random seed. Where appropriate, cross-validation on the training set guides hyperparameter choices. Performance is measured with R$^2$, MSE, RMSE, and MAE. We also examine residuals and predicted-versus-true plots to assess systematic biases across the koi\_score range.

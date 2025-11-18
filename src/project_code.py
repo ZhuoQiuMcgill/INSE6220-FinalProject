@@ -90,6 +90,12 @@ def clean_koi(raw_path: str, out_path: str) -> pd.DataFrame:
     df = df.loc[mask_valid].copy()
     dropped_out_of_range = before_range - len(df)
 
+    # Drop rows missing any of the 12 features used downstream
+    present_feats = [c for c in FEATURE_COLS if c in df.columns]
+    before_drop_feat_na = len(df)
+    df = df.dropna(subset=present_feats)
+    dropped_feat_na = before_drop_feat_na - len(df)
+
     # Normalize string columns
     for c in ['kepoi_name', 'kepler_name', 'koi_disposition', 'koi_pdisposition']:
         if c in df.columns:
@@ -103,6 +109,7 @@ def clean_koi(raw_path: str, out_path: str) -> pd.DataFrame:
     print(f'Dropped exact duplicates: {dropped_dupes}')
     print(f'Dropped missing koi_score: {dropped_y_na}')
     print(f'Dropped out-of-range koi_score: {dropped_out_of_range}')
+    print(f'Dropped rows missing any of the 12 features: {dropped_feat_na}')
     print(f'Kept columns ({len(keep_cols)}): {keep_cols}')
     print(f'Final shape: {df.shape}')
     print(f'Saved to: {out_path}')

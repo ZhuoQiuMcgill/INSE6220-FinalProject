@@ -1,4 +1,3 @@
-# Cell 1
 #=======================================================================================================================
 # Setup: imports and paths
 import os
@@ -16,7 +15,6 @@ DATA_DIR = os.path.dirname(RAW_PATH) if os.path.basename(RAW_PATH) else os.path.
 CLEAN_PATH = os.path.join(DATA_DIR, 'koi_clean.csv')
 #=======================================================================================================================
 
-# Cell 2
 #=======================================================================================================================
 # Column groups (kept consistent with the framework)
 IDENTIFIER_COLS = [
@@ -53,8 +51,8 @@ DROP_ALWAYS = ['koi_tce_plnt_num', 'koi_tce_delivname']
 ALL_KEEP_COLS = IDENTIFIER_COLS + [TARGET_COL] + LABEL_COLS + FEATURE_COLS
 #=======================================================================================================================
 
-# Cell 3
 #=======================================================================================================================
+# Data cleaning function and build clean CSV
 def clean_koi(raw_path: str, out_path: str) -> pd.DataFrame:
     """
     Load raw KOI CSV, select relevant columns, enforce basic validity of koi_score,
@@ -118,7 +116,6 @@ else:
     print(f'Clean file already exists at {CLEAN_PATH}. Set FORCE_REBUILD=True and re-run this cell to rebuild.')
 #=======================================================================================================================
 
-# Cell 4
 #=======================================================================================================================
 # Load the cleaned dataset
 import os
@@ -157,16 +154,16 @@ if missing:
     print(f'WARNING: missing expected columns: {missing}')
 
 for c in LOG10_COLS:
-    X_pre_pca[c] = np.log10(X_pre_pca[c])
+    X_pre_pca[c] = np.log10(np.clip(X_pre_pca[c], 1e-12, None))
 for c in LOG1P_COLS:
-    X_pre_pca[c] = np.log10(X_pre_pca[c] + 1.0)
+    X_pre_pca[c] = np.log10(np.clip(X_pre_pca[c] + 1.0, 1e-12, None))
 
 print(f'Prepared pre-PCA feature matrix: {X_pre_pca.shape}')
 X_pre_pca.head()
 #=======================================================================================================================
 
-# Cell 5
 #=======================================================================================================================
+# EDA boxplots & transform selection
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -205,9 +202,9 @@ for col in numeric_cols:
 # Create transformed copy for plotting
 plot_df = df.copy()
 for col in log10_cols:
-    plot_df[col] = np.log10(plot_df[col])
+    plot_df[col] = np.log10(np.clip(plot_df[col], 1e-12, None))
 for col in log1p_cols:
-    plot_df[col] = np.log10(plot_df[col] + 1.0)
+    plot_df[col] = np.log10(np.clip(plot_df[col] + 1.0, 1e-12, None))
 
 print('Skipped discrete/binary columns:', discrete_small)
 print('Log10 columns:', log10_cols)
@@ -238,7 +235,6 @@ plt.tight_layout()
 plt.show()
 #=======================================================================================================================
 
-# Cell 6
 #=======================================================================================================================
 # Build the 12-feature matrix (order as in FEATURE_COLS) with fixed pre-PCA transforms
 X_cols = [c for c in FEATURE_COLS if c in df.columns]
@@ -251,17 +247,17 @@ LINEAR_COLS = ['koi_impact','koi_steff','koi_slogg','koi_kepmag']
 # Apply transforms in-place, keeping original column order
 for c in LOG10_COLS:
     if c in X_12.columns:
-        X_12[c] = np.log10(X_12[c])
+        X_12[c] = np.log10(np.clip(X_12[c], 1e-12, None))
 for c in LOG1P_COLS:
     if c in X_12.columns:
-        X_12[c] = np.log10(X_12[c] + 1.0)
+        X_12[c] = np.log10(np.clip(X_12[c] + 1.0, 1e-12, None))
 
 print(f'X_12 shape: {X_12.shape}')
 X_12.head()
 #=======================================================================================================================
 
-# Cell 7
 #=======================================================================================================================
+# Correlation heatmap of X_12
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -283,8 +279,8 @@ plt.tight_layout()
 plt.show()
 #=======================================================================================================================
 
-# Cell 8
 #=======================================================================================================================
+# Standardization and PCA (robust)
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -295,11 +291,27 @@ if 'X_12' not in globals():
 scaler = StandardScaler()
 X_std = scaler.fit_transform(X_12.astype(float))
 
+# Ensure finite values before covariance/PCA
+X_std = np.asarray(X_std, dtype=float)
+finite_mask = np.isfinite(X_std).all(axis=1)
+if not np.all(finite_mask):
+    n_drop = X_std.shape[0] - int(np.count_nonzero(finite_mask))
+    print(f'WARNING: Dropping {n_drop} rows with non-finite values before covariance/PCA.')
+    X_std = X_std[finite_mask]
+
 # Covariance matrix (features as columns)
 cov = np.cov(X_std, rowvar=False)
 
-# Eigendecomposition of symmetric covariance matrix
-eigvals, eigvecs = np.linalg.eigh(cov)
+# Eigendecomposition with robust fallback
+try:
+    eigvals, eigvecs = np.linalg.eigh(cov)
+except np.linalg.LinAlgError as e:
+    print(f'WARNING: eigh failed ({e}). Falling back to SVD-based PCA.')
+    U, S, Vt = np.linalg.svd(X_std, full_matrices=False)
+    # Eigenvalues of covariance matrix from singular values
+    eigvals = (S ** 2) / (X_std.shape[0] - 1)
+    eigvecs = Vt.T
+
 # Sort by descending eigenvalue
 order = np.argsort(eigvals)[::-1]
 eigvals = eigvals[order]
@@ -308,13 +320,26 @@ eigvecs = eigvecs[:, order]
 # Eigenvector matrix A: columns are principal axes (PC1..PCm)
 A = pd.DataFrame(eigvecs, index=X_12.columns, columns=[f'PC{i+1}' for i in range(eigvecs.shape[1])])
 
-print('Eigenvalues (descending):')
-print(pd.Series(eigvals, index=[f'PC{i+1}' for i in range(len(eigvals))]).to_string())
+expl_var = eigvals / eigvals.sum()
+cum_var = np.cumsum(expl_var)
+ev_table = pd.DataFrame({
+    'eigenvalue': eigvals,
+    'explained_%': expl_var * 100.0,
+    'cumulative_%': cum_var * 100.0,
+}, index=[f'PC{i+1}' for i in range(len(eigvals))])
+formatters = {
+    'eigenvalue': lambda v: f"{v:.6f}",
+    'explained_%': lambda v: f"{v:.2f}",
+    'cumulative_%': lambda v: f"{v:.2f}",
+}
+print('Eigenvalues and explained variance:')
+print(ev_table.to_string(formatters=formatters))
 print('\nEigenvector matrix A (loadings):')
+print(A.to_string(float_format=lambda x: f"{x:.4f}"))
 #=======================================================================================================================
 
-# Cell 9
 #=======================================================================================================================
+# Scree & Pareto plots (explained variance)
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -346,19 +371,19 @@ plt.tight_layout()
 plt.show()
 #=======================================================================================================================
 
-# Cell 10
 #=======================================================================================================================
-import matplotlib.pyplot as plt
-import seaborn as sns
+# PCA reduction to 5 components (X_5)
+import numpy as np
+import pandas as pd
 
-plt.figure(figsize=(7, 4))
-ax = sns.histplot(df['koi_score'].dropna(), bins=40, kde=True, color='#1f77b4', edgecolor='white')
-ax.set_title('Distribution of koi_score')
-ax.set_xlabel('koi_score')
-ax.set_ylabel('Count')
-ax.set_xlim(0, 1)
-plt.tight_layout()
-plt.show()
+# Guard: require eigvecs and X_std from PCA cell
+if 'eigvecs' not in globals() or 'X_std' not in globals():
+    raise RuntimeError('Run the Standardization and PCA (robust) cell first.')
 
-print('koi_score summary:')
-print(df['koi_score'].describe().to_string())
+k = 5
+W5 = eigvecs[:, :k]
+Z5 = X_std @ W5
+X_5 = pd.DataFrame(Z5, columns=[f'PC{i+1}' for i in range(k)])
+print(f'X_5 shape: {X_5.shape}')
+X_5.head()
+#=======================================================================================================================

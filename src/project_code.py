@@ -394,3 +394,55 @@ X_5 = pd.DataFrame(Z5, columns=[f'PC{i+1}' for i in range(k)])
 print(f'X_5 shape: {X_5.shape}')
 X_5.head()
 #=======================================================================================================================
+
+#=======================================================================================================================
+# PCA visualization: PC1–PC2 scatter, loadings heatmap, and define X_pca5
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Guards: require X_5 (top-5 PCs), A (loadings), X_std (standardized features), and df (labels)
+missing_objs = [name for name in ['X_5', 'A', 'X_std', 'df'] if name not in globals()]
+if missing_objs:
+    raise RuntimeError(f"Missing required objects: {missing_objs}. Run previous cells first.")
+
+# 1) PC space scatter plot (PC1 vs PC2), colored by disposition
+label_col = 'koi_disposition' if 'koi_disposition' in df.columns else (
+    'koi_pdisposition' if 'koi_pdisposition' in df.columns else None
+)
+plot_df = X_5.copy()
+if label_col is not None:
+    plot_df[label_col] = df[label_col].astype('string').fillna('Unknown')
+
+plt.figure(figsize=(7, 6))
+if label_col is not None:
+    ax = sns.scatterplot(data=plot_df, x='PC1', y='PC2', hue=label_col, alpha=0.7, s=25)
+    ax.legend(title=label_col, bbox_to_anchor=(1.05, 1), loc='upper left')
+else:
+    ax = sns.scatterplot(data=plot_df, x='PC1', y='PC2', color='#1f77b4', alpha=0.7, s=25)
+ax.set_title('PC space scatter: PC1 vs PC2')
+ax.grid(True, linestyle=':', alpha=0.4)
+plt.tight_layout()
+plt.show()
+
+# 2) Loadings matrix heatmap for the first 5 PCs
+# A has features as index and PCs as columns; take the first 5 columns (PC1..PC5)
+loadings5 = A.iloc[:, :5].copy()
+plt.figure(figsize=(8.2, 6.2))
+ax = sns.heatmap(loadings5, cmap='vlag', center=0, annot=True, fmt='.2f', linewidths=0.4, cbar_kws=dict(shrink=0.8))
+ax.set_title('Loadings (A): weights of original features on PC1..PC5')
+plt.tight_layout()
+plt.show()
+
+# Print top-contributing original features for PC1..PC3 (by absolute loading)
+for pc in ['PC1', 'PC2', 'PC3']:
+    if pc in loadings5.columns:
+        s = loadings5[pc]
+        top = s.abs().sort_values(ascending=False).head(5).index.tolist()
+        print(f"Top contributors to {pc} (by |loading|): {', '.join(top)}")
+
+# 3) Clarify feature spaces for downstream modeling
+X_pca5 = X_5.copy()
+print(f"Feature spaces ready -> X_std shape: {X_std.shape}, X_pca5 shape: {X_pca5.shape}")
+#=======================================================================================================================

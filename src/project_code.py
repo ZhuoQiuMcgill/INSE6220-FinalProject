@@ -446,3 +446,29 @@ for pc in ['PC1', 'PC2', 'PC3']:
 X_pca5 = X_5.copy()
 print(f"Feature spaces ready -> X_std shape: {X_std.shape}, X_pca5 shape: {X_pca5.shape}")
 #=======================================================================================================================
+
+#=======================================================================================================================
+# Feature matrices for ML: x_original (standardized 12-D) and x_pca5 (PC1..PC5)
+import pandas as pd
+
+# Guards to ensure prerequisites exist
+needed = []
+for name in ['X_std', 'X_12']:
+    if name not in globals():
+        needed.append(name)
+if needed:
+    raise RuntimeError(f"Missing required objects: {needed}. Run the Standardization and PCA cells first.")
+
+# Ensure X_pca5 exists (fallback to X_5 if defined)
+if 'X_pca5' not in globals():
+    if 'X_5' in globals():
+        X_pca5 = X_5.copy()
+    else:
+        raise RuntimeError('X_pca5 not found and X_5 unavailable. Run the PCA reduction cell first.')
+
+# Create DataFrames for downstream ML usage
+x_original = pd.DataFrame(X_std, columns=list(X_12.columns))  # standardized 12-D features
+x_pca5 = X_pca5.copy()  # 5 principal components (PC1..PC5)
+
+print(f"Prepared matrices -> x_original: {x_original.shape}, x_pca5: {x_pca5.shape}")
+#=======================================================================================================================

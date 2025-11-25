@@ -244,12 +244,20 @@ if 'X_12' not in globals():
 
 corr = X_12.corr(numeric_only=True)
 
-# Mask upper triangle for cleanliness
+# 1) Correlation heatmap (lower triangle)
 mask = np.triu(np.ones_like(corr, dtype=bool))
 plt.figure(figsize=(9.5, 7.5))
 sns.heatmap(corr, mask=mask, cmap='vlag', vmin=-1, vmax=1, center=0,
             annot=True, fmt='.2f', linewidths=0.5, cbar_kws=dict(shrink=0.8))
 plt.title('Correlation matrix of transformed features (X_12)')
+plt.tight_layout()
+plt.show()
+
+# 2) Pairplot to visualize bivariate relations between attributes (sampled for efficiency)
+sample_size = min(1000, len(X_12))
+X_pair = X_12.sample(n=sample_size, random_state=6220)
+sns.pairplot(X_pair, corner=True, diag_kind='hist', plot_kws={'s': 10, 'alpha': 0.4})
+plt.suptitle('Pairwise relationships of transformed features (sample)', y=1.02)
 plt.tight_layout()
 plt.show()
 #=======================================================================================================================
@@ -264,9 +272,9 @@ if 'X_12' not in globals() or 'df_labeled' not in globals():
 X = X_12.copy()
 y = df_labeled.loc[X.index, 'quality_label'].astype(int)
 
-# Train-test split with stratification on the binary label
+# Train-test split with stratification on the binary label (80/20 split)
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.30, random_state=6220, stratify=y
+    X, y, test_size=0.20, random_state=6220, stratify=y
 )
 
 # Standardize features based on training set only
@@ -325,8 +333,8 @@ loadings = pca_model.results['loadings']
 print('\nLoadings matrix A (first 5 PCs):')
 print(loadings.iloc[:, :5].to_string(float_format=lambda x: f'{x:.4f}'))
 
-# Choose number of PCs to retain (k) around 80-90% cumulative variance
-k_default = np.searchsorted(cum_var, 0.90) + 1
+# Choose number of PCs to retain (k) to reach at least ~80% cumulative variance
+k_default = np.searchsorted(cum_var, 0.80) + 1
 k = int(min(max(k_default, 2), X.shape[1]))
 print(f'\nRetaining k={k} principal components, covering {cum_var[k-1]*100:.2f}% of variance.')
 

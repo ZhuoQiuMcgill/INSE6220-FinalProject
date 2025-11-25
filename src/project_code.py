@@ -415,35 +415,8 @@ plt.show()
 #=======================================================================================================================
 
 #=======================================================================================================================
-# PCA visualization: PC1–PC2 scatter and loadings heatmap
-# Build PCA coordinates for all labeled samples for visualization
-X_std_all = pd.concat([X_train_std_df, X_test_std_df], axis=0).loc[X.index]
-PC_all_df = pca_model.transform(X_std_all)
-# Keep only PC columns and first two components for plotting
-pc_cols_all = [c for c in PC_all_df.columns if isinstance(c, str) and c.startswith('PC')]
-PC_all_df = PC_all_df[pc_cols_all].iloc[:, :max(2, k)].copy()
-# Align labels by the order of X_std_all (not by transformed index labels)
-y_all = y.loc[X_std_all.index].astype(int).to_numpy()
-PC_all_df['quality_label'] = y_all
-
-# 1) PC1 vs PC2 scatter colored by binary label
-plt.figure(figsize=(7, 6))
-ax = sns.scatterplot(
-    data=PC_all_df,
-    x='PC1',
-    y='PC2',
-    hue='quality_label',
-    palette=QUALITY_LABEL_PALETTE,
-    alpha=0.7,
-    s=25,
-)
-ax.legend(title='quality_label', bbox_to_anchor=(1.05, 1), loc='upper left')
-ax.set_title('PC space scatter: PC1 vs PC2 (binary quality label)')
-ax.grid(True, linestyle=':', alpha=0.4)
-plt.tight_layout()
-plt.show()
-
-# 2) Loadings heatmap for first k PCs (rows=features, columns=PCs)
+# PCA loadings heatmap and top contributors
+# 1) Loadings heatmap for first k PCs (rows=features, columns=PCs)
 if 'loadings_pc' not in globals():
     if 'pca_model' not in globals():
         raise RuntimeError('loadings_pc not found and pca_model missing. Run the PCA cell first.')
@@ -487,6 +460,160 @@ for i in range(1, max_pc_to_report + 1):
         s = loadings_k.loc[pc_name]
         top_features = s.abs().sort_values(ascending=False).head(5).index.tolist()
         print(f'Top contributors to {pc_name} (by |loading|): {", ".join(top_features)}')
+#=======================================================================================================================
+
+#=======================================================================================================================
+# PCA coefficient bar plots for first few PCs
+# Visualize signed loadings of original features on each principal component
+if 'loadings_pc' not in globals():
+    raise RuntimeError('loadings_pc not found. Run the PCA cell first to compute loadings.')
+
+max_pc_to_plot = min(4, k)
+for i in range(1, max_pc_to_plot + 1):
+    pc_name = f'PC{i}'
+    if pc_name not in loadings_pc.index:
+        continue
+    coeffs = loadings_pc.loc[pc_name]
+    coeffs_sorted = coeffs.sort_values(key=lambda s: s.abs(), ascending=False)
+    plt.figure(figsize=(8.5, 4.2))
+    sns.barplot(x=coeffs_sorted.index, y=coeffs_sorted.values, palette='vlag')
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel('Loading')
+    plt.title(f'PCA coefficient plot: loadings of original features on {pc_name}')
+    plt.grid(True, axis='y', linestyle=':', alpha=0.4)
+    plt.tight_layout()
+    plt.show()
+#=======================================================================================================================
+
+#=======================================================================================================================
+# PCA coefficient scatter plot: A1 vs A2 for original features
+# Each point is a feature; coordinates given by loadings on PC1 and PC2
+if 'loadings_pc' not in globals():
+    raise RuntimeError('loadings_pc not found. Run the PCA cell first to compute loadings.')
+
+# Build A matrix for plotting (n_features x 4)
+feature_names = list(X_12.columns)
+A1 = loadings_pc.loc['PC1', feature_names].to_numpy()
+A2 = loadings_pc.loc['PC2', feature_names].to_numpy()
+if 'PC3' in loadings_pc.index:
+    A3 = np.abs(loadings_pc.loc['PC3', feature_names].to_numpy())
+else:
+    A3 = np.sqrt(A1 ** 2 + A2 ** 2)
+A4 = np.sqrt(A1 ** 2 + A2 ** 2)  # overall contribution in PC1–PC2 plane
+A = np.column_stack([A1, A2, A3, A4])
+
+plt.figure(figsize=(7.2, 5.6))
+sc = plt.scatter(
+    A[:, 0],
+    A[:, 1],
+    marker='o',
+    c=A[:, 2],
+    s=(np.abs(A[:, 3]) * 600 + 80),
+    cmap=plt.get_cmap('Spectral'),
+    alpha=0.9,
+    edgecolors='black',
+    linewidths=0.5,
+)
+plt.xlabel(r'$A_1$ (loading on PC1)')
+plt.ylabel(r'$A_2$ (loading on PC2)')
+
+for label, x, y in zip(feature_names, A[:, 0], A[:, 1]):
+    plt.annotate(
+        label,
+        xy=(x, y),
+        xytext=(-20, 20),
+        textcoords='offset points',
+        ha='right',
+        va='bottom',
+        bbox=dict(boxstyle='round,pad=0.5', fc='olive', alpha=0.7),
+        arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.1', color='white', lw=0.8),
+    )
+
+cbar = plt.colorbar(sc)
+cbar.set_label('Color ~ |loading on PC3| (or overall magnitude)')
+plt.grid(True, linestyle=':', alpha=0.4)
+plt.tight_layout()
+plt.show()
+#=======================================================================================================================
+
+#=======================================================================================================================
+# PCA biplot: PC1 vs PC2 with eigenvectors (feature loadings)
+# Combine PC score scatter and projected eigenvectors of original features
+if 'pca_model' not in globals():
+    raise RuntimeError('pca_model not found. Run the PCA cell first.')
+
+# Build or reuse PC coordinates for all labeled samples
+if 'X_std_all' not in globals() or 'PC_all_df' not in globals() or 'PC1' not in PC_all_df.columns:
+    X_std_all = pd.concat([X_train_std_df, X_test_std_df], axis=0).loc[X.index]
+    PC_all_tmp = pca_model.transform(X_std_all)
+    pc_cols_all = [c for c in PC_all_tmp.columns if isinstance(c, str) and str(c).startswith('PC')]
+    PC_all_df = PC_all_tmp[pc_cols_all].iloc[:, :max(2, k)].copy()
+    y_all = y.loc[X_std_all.index].astype(int).to_numpy()
+    PC_all_df['quality_label'] = y_all
+
+# Eigenvectors in the PC1–PC2 plane (from loadings)
+if 'loadings_pc' not in globals():
+    loadings_raw = pca_model.results['loadings']
+    idx_str = [str(v) for v in loadings_raw.index]
+    col_str = [str(v) for v in loadings_raw.columns]
+    has_pc_in_index = any(s.startswith('PC') for s in idx_str)
+    has_pc_in_cols = any(s.startswith('PC') for s in col_str)
+    if has_pc_in_index and not has_pc_in_cols:
+        loadings_pc = loadings_raw.copy()
+    elif has_pc_in_cols and not has_pc_in_index:
+        loadings_pc = loadings_raw.T.copy()
+    else:
+        loadings_pc = loadings_raw.T.copy()
+
+if 'PC1' not in loadings_pc.index or 'PC2' not in loadings_pc.index:
+    raise RuntimeError('PC1 or PC2 not found in loadings matrix.')
+
+vecs_2d = loadings_pc.loc[['PC1', 'PC2'], :]  # shape (2, n_features)
+
+# Scale eigenvectors to match PC score scatter scale
+scores = PC_all_df[['PC1', 'PC2']].to_numpy()
+score_radius = np.sqrt((scores ** 2).sum(axis=1))
+score_scale = np.quantile(score_radius, 0.9)
+vec_lengths = np.sqrt((vecs_2d.values ** 2).sum(axis=0))
+max_vec_len = float(vec_lengths.max()) if vec_lengths.size > 0 else 1.0
+arrow_scale = (score_scale / max_vec_len) * 0.8 if max_vec_len > 0 else 1.0
+
+plt.figure(figsize=(7.2, 6.2))
+ax = sns.scatterplot(
+    data=PC_all_df,
+    x='PC1',
+    y='PC2',
+    hue='quality_label',
+    palette=QUALITY_LABEL_PALETTE,
+    alpha=0.6,
+    s=18,
+)
+
+# Draw eigenvector arrows from origin
+origin_x, origin_y = 0.0, 0.0
+for feat in X_12.columns:
+    vx = float(vecs_2d.loc['PC1', feat]) * arrow_scale
+    vy = float(vecs_2d.loc['PC2', feat]) * arrow_scale
+    ax.arrow(
+        origin_x,
+        origin_y,
+        vx,
+        vy,
+        color='black',
+        alpha=0.7,
+        width=0.01,
+        head_width=0.18,
+        head_length=0.28,
+        length_includes_head=True,
+    )
+    ax.text(vx * 1.08, vy * 1.08, feat, fontsize=8, ha='center', va='center', color='white')
+
+ax.axhline(0, color='grey', linestyle='--', linewidth=0.7, alpha=0.6)
+ax.axvline(0, color='grey', linestyle='--', linewidth=0.7, alpha=0.6)
+ax.set_title('PCA biplot: PC1 vs PC2 with feature eigenvectors')
+ax.grid(True, linestyle=':', alpha=0.3)
+plt.tight_layout()
+plt.show()
 #=======================================================================================================================
 
 #=======================================================================================================================

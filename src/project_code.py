@@ -463,29 +463,6 @@ for i in range(1, max_pc_to_report + 1):
 #=======================================================================================================================
 
 #=======================================================================================================================
-# PCA coefficient bar plots for first few PCs
-# Visualize signed loadings of original features on each principal component
-if 'loadings_pc' not in globals():
-    raise RuntimeError('loadings_pc not found. Run the PCA cell first to compute loadings.')
-
-max_pc_to_plot = min(4, k)
-for i in range(1, max_pc_to_plot + 1):
-    pc_name = f'PC{i}'
-    if pc_name not in loadings_pc.index:
-        continue
-    coeffs = loadings_pc.loc[pc_name]
-    coeffs_sorted = coeffs.sort_values(key=lambda s: s.abs(), ascending=False)
-    plt.figure(figsize=(8.5, 4.2))
-    sns.barplot(x=coeffs_sorted.index, y=coeffs_sorted.values, palette='vlag')
-    plt.xticks(rotation=45, ha='right')
-    plt.ylabel('Loading')
-    plt.title(f'PCA coefficient plot: loadings of original features on {pc_name}')
-    plt.grid(True, axis='y', linestyle=':', alpha=0.4)
-    plt.tight_layout()
-    plt.show()
-#=======================================================================================================================
-
-#=======================================================================================================================
 # PCA coefficient scatter plot: A1 vs A2 for original features
 # Each point is a feature; coordinates given by loadings on PC1 and PC2
 if 'loadings_pc' not in globals():
@@ -543,7 +520,13 @@ if 'pca_model' not in globals():
     raise RuntimeError('pca_model not found. Run the PCA cell first.')
 
 # Build or reuse PC coordinates for all labeled samples
-if 'X_std_all' not in globals() or 'PC_all_df' not in globals() or 'PC1' not in PC_all_df.columns:
+need_build_pc_all = True
+if 'X_std_all' in globals() and 'PC_all_df' in globals():
+    pc_all_tmp = globals()['PC_all_df']
+    if isinstance(pc_all_tmp, pd.DataFrame) and 'PC1' in pc_all_tmp.columns:
+        need_build_pc_all = False
+
+if need_build_pc_all:
     X_std_all = pd.concat([X_train_std_df, X_test_std_df], axis=0).loc[X.index]
     PC_all_tmp = pca_model.transform(X_std_all)
     pc_cols_all = [c for c in PC_all_tmp.columns if isinstance(c, str) and str(c).startswith('PC')]

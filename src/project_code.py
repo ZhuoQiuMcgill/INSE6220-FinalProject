@@ -1,10 +1,18 @@
 #=======================================================================================================================
-# Setup: imports and paths
+# Setup: imports, global config, and paths
 import os
-import pandas as pd
+import math
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from pca import pca
 
 pd.set_option('display.max_columns', None)
+plt.rcParams['figure.figsize'] = (7, 5)
+
 # Resolve raw and clean paths robustly relative to working directory
 RAW_CANDIDATES = [
     os.path.join('../data', 'koi.csv'),
@@ -124,10 +132,7 @@ else:
 #=======================================================================================================================
 
 #=======================================================================================================================
-# Load the cleaned dataset
-import os
-import pandas as pd
-
+# Load the cleaned dataset and perform basic EDA + binary label construction
 CLEAN_CANDIDATES = [
     os.path.join('../data', 'koi_clean.csv'),
     os.path.join('../..', 'data', 'koi_clean.csv'),
@@ -135,91 +140,63 @@ CLEAN_CANDIDATES = [
 CLEAN_PATH = next((p for p in CLEAN_CANDIDATES if os.path.isfile(p)), CLEAN_CANDIDATES[0])
 df = pd.read_csv(CLEAN_PATH, low_memory=False)
 
-# Re-declare column groups for standalone use of this cell onward
-IDENTIFIER_COLS = ['kepid', 'kepoi_name', 'kepler_name']
-TARGET_COL = 'koi_score'
-LABEL_COLS = ['koi_disposition','koi_pdisposition','koi_fpflag_nt','koi_fpflag_ss','koi_fpflag_co','koi_fpflag_ec']
-FEATURE_COLS = [
-    'koi_period','koi_impact','koi_duration','koi_depth','koi_model_snr',
-    'koi_prad','koi_teq','koi_insol','koi_steff','koi_slogg','koi_srad','koi_kepmag'
-]
-
 print(f'Loaded clean dataset: {df.shape[0]} rows x {df.shape[1]} columns')
+
+# Basic inspection
+print('\nDataFrame info:')
+df.info()
+print('\nSummary statistics for koi_score and selected features:')
+print(df[['koi_score'] + FEATURE_COLS].describe())
+print(f"Number of exact duplicate rows: {df.duplicated().sum()}")
+
+# koi_score distribution with thresholds 0.1 and 0.9
+plt.figure(figsize=(6.5, 4.0))
+sns.histplot(df['koi_score'].dropna(), bins=40, kde=True, color='#1f77b4')
+plt.axvline(0.1, color='red', linestyle='--', linewidth=1.3, label='0.1 threshold')
+plt.axvline(0.9, color='green', linestyle='--', linewidth=1.3, label='0.9 threshold')
+plt.title('Distribution of koi_score')
+plt.xlabel('koi_score')
+plt.ylabel('Count')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Binary quality label construction based on koi_score (per FRAMEWORK)
+df['quality_label'] = np.nan
+df.loc[df['koi_score'] >= 0.9, 'quality_label'] = 1
+df.loc[df['koi_score'] <= 0.1, 'quality_label'] = 0
+df_labeled = df.dropna(subset=['quality_label']).copy()
+df_labeled['quality_label'] = df_labeled['quality_label'].astype(int)
+
+print('\nAfter applying koi_score thresholds:')
+print(f'  Labeled samples: {df_labeled.shape[0]}')
+print('  Label distribution (0=low quality, 1=high quality):')
+print(df_labeled['quality_label'].value_counts().sort_index())
 
 # Pre-PCA transform specification (fixed per FRAMEWORK)
 LOG10_COLS = ['koi_period','koi_duration','koi_prad','koi_teq','koi_insol','koi_srad']
 LOG1P_COLS = ['koi_depth','koi_model_snr']
 LINEAR_COLS = ['koi_impact','koi_steff','koi_slogg','koi_kepmag']
+#=======================================================================================================================
 
-# Build 12-feature matrix and apply transforms
+#=======================================================================================================================
+# EDA boxplots of transformed numerical features (using labeled subset)
+# Use labeled subset and fixed transform lists per FRAMEWORK
 feat_cols = LOG10_COLS + LOG1P_COLS + LINEAR_COLS
-X_pre_pca = df.loc[:, [c for c in feat_cols if c in df.columns]].copy()
+plot_df = df_labeled.loc[:, feat_cols].copy()
 
-# Sanity checks
-missing = [c for c in feat_cols if c not in X_pre_pca.columns]
-if missing:
-    print(f'WARNING: missing expected columns: {missing}')
-
-for c in LOG10_COLS:
-    X_pre_pca[c] = np.log10(np.clip(X_pre_pca[c], 1e-12, None))
-for c in LOG1P_COLS:
-    X_pre_pca[c] = np.log10(np.clip(X_pre_pca[c] + 1.0, 1e-12, None))
-
-print(f'Prepared pre-PCA feature matrix: {X_pre_pca.shape}')
-X_pre_pca.head()
-#=======================================================================================================================
-
-#=======================================================================================================================
-# EDA boxplots & transform selection
-import math
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Use only the 12-feature vector (updated framework)
-plot_cols = [c for c in FEATURE_COLS if c in df.columns]
-# Identify discrete small-cardinality numeric columns to skip in box plots
-discrete_small = [c for c in plot_cols if df[c].nunique(dropna=True) <= 5]
-numeric_cols = [c for c in plot_cols if c not in discrete_small]
-
-# Columns we keep linear due to physical meaning (bounded/magnitude)
-never_log = {'koi_impact','koi_kepmag'}
-
-log10_cols, log1p_cols, linear_cols = [], [], []
-for col in numeric_cols:
-    s = pd.to_numeric(df[col], errors='coerce').dropna()
-    if col in never_log:
-        linear_cols.append(col)
-        continue
-    if len(s) < 3:
-        linear_cols.append(col)
-        continue
-    skew = float(s.skew())
-    q95, q05 = s.quantile(0.95), s.quantile(0.05)
-    ratio = (q95 / max(q05, 1e-12)) if q05 > 0 else np.inf
-    criterion = (skew > 0.75) or (ratio > 20)
-    minv = float(s.min())
-    if criterion and minv > 0:
-        log10_cols.append(col)
-    elif criterion and minv >= 0:
-        log1p_cols.append(col)
-    else:
-        linear_cols.append(col)
-
-# Create transformed copy for plotting
-plot_df = df.copy()
-for col in log10_cols:
+# Apply the same transforms that will be used for PCA
+for col in LOG10_COLS:
     plot_df[col] = np.log10(np.clip(plot_df[col], 1e-12, None))
-for col in log1p_cols:
+for col in LOG1P_COLS:
     plot_df[col] = np.log10(np.clip(plot_df[col] + 1.0, 1e-12, None))
 
-print('Skipped discrete/binary columns:', discrete_small)
-print('Log10 columns:', log10_cols)
-print('Log10(1+x) columns:', log1p_cols)
-print('Linear columns:', linear_cols)
+print('Using fixed transforms per FRAMEWORK:')
+print('  Log10 columns:', LOG10_COLS)
+print('  Log10(1+x) columns:', LOG1P_COLS)
+print('  Linear columns:', LINEAR_COLS)
 
-# Plot box plots using transformed data where applicable
-cols_to_plot = numeric_cols
+cols_to_plot = feat_cols
 ncols = 4
 nrows = math.ceil(len(cols_to_plot) / ncols)
 fig, axes = plt.subplots(nrows, ncols, figsize=(4.8 * ncols, 3.0 * nrows), squeeze=False)
@@ -228,7 +205,7 @@ for i, col in enumerate(cols_to_plot):
     r, c = divmod(i, ncols)
     ax = axes[r][c]
     sns.boxplot(x=plot_df[col].dropna(), ax=ax, color='#9467bd', orient='h', whis=1.5, showfliers=False)
-    tr = ' (log10)' if col in log10_cols else (' (log10(1+x))' if col in log1p_cols else '')
+    tr = ' (log10)' if col in LOG10_COLS else (' (log10(1+x))' if col in LOG1P_COLS else '')
     ax.set_title(col + tr)
     ax.grid(True, axis='x', linestyle=':', alpha=0.35)
 
@@ -243,14 +220,10 @@ plt.show()
 #=======================================================================================================================
 
 #=======================================================================================================================
-# Build the 12-feature matrix (order as in FEATURE_COLS) with fixed pre-PCA transforms
-X_cols = [c for c in FEATURE_COLS if c in df.columns]
-X_12 = df.loc[:, X_cols].copy()
+# Build the 12-feature matrix (order as in FEATURE_COLS) with fixed pre-PCA transforms on labeled data
+X_cols = [c for c in FEATURE_COLS if c in df_labeled.columns]
+X_12 = df_labeled.loc[:, X_cols].copy()
 
-# Ensure transform lists exist (defined earlier)
-LOG10_COLS = ['koi_period','koi_duration','koi_prad','koi_teq','koi_insol','koi_srad']
-LOG1P_COLS = ['koi_depth','koi_model_snr']
-LINEAR_COLS = ['koi_impact','koi_steff','koi_slogg','koi_kepmag']
 # Apply transforms in-place, keeping original column order
 for c in LOG10_COLS:
     if c in X_12.columns:
@@ -259,17 +232,12 @@ for c in LOG1P_COLS:
     if c in X_12.columns:
         X_12[c] = np.log10(np.clip(X_12[c] + 1.0, 1e-12, None))
 
-print(f'X_12 shape: {X_12.shape}')
-X_12.head()
+print(f'X_12 shape (labeled, transformed): {X_12.shape}')
+X_12.head(10)
 #=======================================================================================================================
 
 #=======================================================================================================================
 # Correlation heatmap of X_12
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
 # Guard: require X_12 exists
 if 'X_12' not in globals():
     raise RuntimeError('X_12 not found. Run the Pre-PCA 12-feature table cell first.')
@@ -287,188 +255,200 @@ plt.show()
 #=======================================================================================================================
 
 #=======================================================================================================================
-# Standardization and PCA (robust)
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
+# Train-test split, standardization, and PCA (using pca package)
+# Guard: require X_12 (transformed 12-D features) and df_labeled (with quality_label)
+if 'X_12' not in globals() or 'df_labeled' not in globals():
+    raise RuntimeError('X_12 and df_labeled not found. Run the previous preprocessing cells first.')
 
-if 'X_12' not in globals():
-    raise RuntimeError('X_12 not found. Run the Pre-PCA 12-feature table cell first.')
+# Prepare feature matrix and label vector
+X = X_12.copy()
+y = df_labeled.loc[X.index, 'quality_label'].astype(int)
 
+# Train-test split with stratification on the binary label
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.30, random_state=6220, stratify=y
+)
+
+# Standardize features based on training set only
 scaler = StandardScaler()
-X_std = scaler.fit_transform(X_12.astype(float))
+X_train_std = scaler.fit_transform(X_train.astype(float))
+X_test_std = scaler.transform(X_test.astype(float))
 
-# Ensure finite values before covariance/PCA
-X_std = np.asarray(X_std, dtype=float)
-finite_mask = np.isfinite(X_std).all(axis=1)
-if not np.all(finite_mask):
-    n_drop = X_std.shape[0] - int(np.count_nonzero(finite_mask))
-    print(f'WARNING: Dropping {n_drop} rows with non-finite values before covariance/PCA.')
-    X_std = X_std[finite_mask]
+X_train_std = np.asarray(X_train_std, dtype=float)
+X_test_std = np.asarray(X_test_std, dtype=float)
 
-# Covariance matrix (features as columns)
-cov = np.cov(X_std, rowvar=False)
+X_train_std_df = pd.DataFrame(X_train_std, columns=X.columns, index=X_train.index)
+X_test_std_df = pd.DataFrame(X_test_std, columns=X.columns, index=X_test.index)
 
-# Eigendecomposition with robust fallback
-try:
-    eigvals, eigvecs = np.linalg.eigh(cov)
-except np.linalg.LinAlgError as e:
-    print(f'WARNING: eigh failed ({e}). Falling back to SVD-based PCA.')
-    U, S, Vt = np.linalg.svd(X_std, full_matrices=False)
-    # Eigenvalues of covariance matrix from singular values
-    eigvals = (S ** 2) / (X_std.shape[0] - 1)
-    eigvecs = Vt.T
+print(f'Training set (standardized): {X_train_std_df.shape}')
+print(f'Test set (standardized):      {X_test_std_df.shape}')
+print('Training label distribution:')
+print(y_train.value_counts().sort_index())
+print('Test label distribution:')
+print(y_test.value_counts().sort_index())
 
-# Sort by descending eigenvalue
-order = np.argsort(eigvals)[::-1]
-eigvals = eigvals[order]
-eigvecs = eigvecs[:, order]
+# Fit PCA on standardized training set (all 12 PCs)
+pca_model = pca(n_components=None, normalize=False, detect_outliers=None, random_state=6220)
+pca_results = pca_model.fit_transform(X_train_std_df)
 
-# Eigenvector matrix A: columns are principal axes (PC1..PCm)
-A = pd.DataFrame(eigvecs, index=X_12.columns, columns=[f'PC{i+1}' for i in range(eigvecs.shape[1])])
+# Explained variance information from pca model results
+explained_cum = np.asarray(pca_model.results['explained_var'], dtype=float)
+if 'variance_ratio' in pca_model.results:
+    expl_var = np.asarray(pca_model.results['variance_ratio'], dtype=float)
+else:
+    # Derive per-component variance from cumulative curve if variance_ratio is not available
+    expl_var = np.diff(np.concatenate([[0.0], explained_cum]))
 
-expl_var = eigvals / eigvals.sum()
 cum_var = np.cumsum(expl_var)
+pc_labels = [f'PC{i+1}' for i in range(len(expl_var))]
+
+# Approximate eigenvalues: total variance equals number of standardized features
+total_var = float(X_train_std_df.shape[1])
+eigvals = expl_var * total_var
+
 ev_table = pd.DataFrame({
     'eigenvalue': eigvals,
     'explained_%': expl_var * 100.0,
     'cumulative_%': cum_var * 100.0,
-}, index=[f'PC{i+1}' for i in range(len(eigvals))])
+}, index=pc_labels)
+
 formatters = {
-    'eigenvalue': lambda v: f"{v:.6f}",
-    'explained_%': lambda v: f"{v:.2f}",
-    'cumulative_%': lambda v: f"{v:.2f}",
+    'eigenvalue': lambda v: f'{v:.6f}',
+    'explained_%': lambda v: f'{v:.2f}',
+    'cumulative_%': lambda v: f'{v:.2f}',
 }
-print('Eigenvalues and explained variance:')
+print('Eigenvalues and explained variance (PCA on training set):')
 print(ev_table.to_string(formatters=formatters))
-print('\nEigenvector matrix A (loadings):')
-print(A.to_string(float_format=lambda x: f"{x:.4f}"))
+
+# Loadings matrix (features x PCs)
+loadings = pca_model.results['loadings']
+print('\nLoadings matrix A (first 5 PCs):')
+print(loadings.iloc[:, :5].to_string(float_format=lambda x: f'{x:.4f}'))
+
+# Choose number of PCs to retain (k) around 80-90% cumulative variance
+k_default = np.searchsorted(cum_var, 0.90) + 1
+k = int(min(max(k_default, 2), X.shape[1]))
+print(f'\nRetaining k={k} principal components, covering {cum_var[k-1]*100:.2f}% of variance.')
+
+# Build PCA feature matrices for train and test using the fitted model
+PC_train_df = pca_model.transform(X_train_std_df)
+PC_test_df = pca_model.transform(X_test_std_df)
+
+# Ensure consistent column order and keep only first k PCs
+pc_cols = [c for c in PC_train_df.columns if isinstance(c, str) and c.startswith('PC')]
+PC_train_df = PC_train_df[pc_cols]
+PC_test_df = PC_test_df[pc_cols]
+
+X_train_pca = PC_train_df.iloc[:, :k].copy()
+X_test_pca = PC_test_df.iloc[:, :k].copy()
+
+print(f'PCA feature matrices -> X_train_pca: {X_train_pca.shape}, X_test_pca: {X_test_pca.shape}')
 #=======================================================================================================================
 
 #=======================================================================================================================
-# Scree & Pareto plots (explained variance)
-import numpy as np
-import matplotlib.pyplot as plt
-
-# Require eigvals from previous cell
+# Scree and Pareto plots (explained variance from PCA)
 if 'eigvals' not in globals():
-    raise RuntimeError('Run the PCA eigen decomposition cell first.')
+    raise RuntimeError('eigvals not found. Run the PCA cell first.')
 
-expl_var = eigvals / eigvals.sum()
-cum_var = np.cumsum(expl_var)
 pcs = np.arange(1, len(eigvals) + 1)
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-# Scree
+
+# Scree plot (eigenvalues)
 axes[0].plot(pcs, eigvals, 'o-', color='#1f77b4')
 axes[0].set_title('Scree Plot (Eigenvalues)')
 axes[0].set_xlabel('Principal Component')
 axes[0].set_ylabel('Eigenvalue')
 axes[0].grid(True, linestyle=':', alpha=0.4)
-# Pareto
-axes[1].bar(pcs, expl_var * 100, color='#1f77b4', alpha=0.7, label='Individual %')
-axes[1].plot(pcs, cum_var * 100, 'o-', color='#d62728', label='Cumulative %')
+
+# Pareto plot (explained and cumulative variance)
+axes[1].bar(pcs, expl_var * 100.0, color='#1f77b4', alpha=0.7, label='Individual %')
+axes[1].plot(pcs, cum_var * 100.0, 'o-', color='#d62728', label='Cumulative %')
 axes[1].set_title('Pareto Plot (Explained Variance)')
 axes[1].set_xlabel('Principal Component')
 axes[1].set_ylabel('% Variance Explained')
 axes[1].set_ylim(0, 110)
 axes[1].legend()
 axes[1].grid(True, linestyle=':', alpha=0.4)
+
 plt.tight_layout()
 plt.show()
 #=======================================================================================================================
 
 #=======================================================================================================================
-# PCA reduction to 5 components (X_5)
-import numpy as np
-import pandas as pd
+# PCA visualization: PC1–PC2 scatter and loadings heatmap
+# Build PCA coordinates for all labeled samples for visualization
+X_std_all = pd.concat([X_train_std_df, X_test_std_df], axis=0).loc[X.index]
+PC_all_df = pca_model.transform(X_std_all)
+# Keep only PC columns and first two components for plotting
+pc_cols_all = [c for c in PC_all_df.columns if isinstance(c, str) and c.startswith('PC')]
+PC_all_df = PC_all_df[pc_cols_all].iloc[:, :max(2, k)].copy()
+# Align labels by the order of X_std_all (not by transformed index labels)
+y_all = y.loc[X_std_all.index].astype(int).to_numpy()
+PC_all_df['quality_label'] = y_all
 
-# Guard: require eigvecs and X_std from PCA cell
-if 'eigvecs' not in globals() or 'X_std' not in globals():
-    raise RuntimeError('Run the Standardization and PCA (robust) cell first.')
-
-k = 5
-W5 = eigvecs[:, :k]
-Z5 = X_std @ W5
-X_5 = pd.DataFrame(Z5, columns=[f'PC{i+1}' for i in range(k)])
-print(f'X_5 shape: {X_5.shape}')
-X_5.head()
-#=======================================================================================================================
-
-#=======================================================================================================================
-# PCA visualization: PC1–PC2 scatter, loadings heatmap, and define X_pca5
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Guards: require X_5 (top-5 PCs), A (loadings), X_std (standardized features), and df (labels)
-missing_objs = [name for name in ['X_5', 'A', 'X_std', 'df'] if name not in globals()]
-if missing_objs:
-    raise RuntimeError(f"Missing required objects: {missing_objs}. Run previous cells first.")
-
-# 1) PC space scatter plot (PC1 vs PC2), colored by disposition
-label_col = 'koi_disposition' if 'koi_disposition' in df.columns else (
-    'koi_pdisposition' if 'koi_pdisposition' in df.columns else None
-)
-plot_df = X_5.copy()
-if label_col is not None:
-    plot_df[label_col] = df[label_col].astype('string').fillna('Unknown')
-
+# 1) PC1 vs PC2 scatter colored by binary label
 plt.figure(figsize=(7, 6))
-if label_col is not None:
-    ax = sns.scatterplot(data=plot_df, x='PC1', y='PC2', hue=label_col, alpha=0.7, s=25)
-    ax.legend(title=label_col, bbox_to_anchor=(1.05, 1), loc='upper left')
-else:
-    ax = sns.scatterplot(data=plot_df, x='PC1', y='PC2', color='#1f77b4', alpha=0.7, s=25)
-ax.set_title('PC space scatter: PC1 vs PC2')
+ax = sns.scatterplot(
+    data=PC_all_df,
+    x='PC1',
+    y='PC2',
+    hue='quality_label',
+    palette={0: '#ff7f0e', 1: '#1f77b4'},
+    alpha=0.7,
+    s=25,
+)
+ax.legend(title='quality_label', bbox_to_anchor=(1.05, 1), loc='upper left')
+ax.set_title('PC space scatter: PC1 vs PC2 (binary quality label)')
 ax.grid(True, linestyle=':', alpha=0.4)
 plt.tight_layout()
 plt.show()
 
-# 2) Loadings matrix heatmap for the first 5 PCs
-# A has features as index and PCs as columns; take the first 5 columns (PC1..PC5)
-loadings5 = A.iloc[:, :5].copy()
+# 2) Loadings heatmap for first k PCs
+loadings_k = loadings.iloc[:, :k].copy()
 plt.figure(figsize=(8.2, 6.2))
-ax = sns.heatmap(loadings5, cmap='vlag', center=0, annot=True, fmt='.2f', linewidths=0.4, cbar_kws=dict(shrink=0.8))
-ax.set_title('Loadings (A): weights of original features on PC1..PC5')
+ax = sns.heatmap(
+    loadings_k,
+    cmap='vlag',
+    center=0,
+    annot=True,
+    fmt='.2f',
+    linewidths=0.4,
+    cbar_kws=dict(shrink=0.8),
+)
+ax.set_title('Loadings (A): weights of original features on first k PCs')
 plt.tight_layout()
 plt.show()
 
-# Print top-contributing original features for PC1..PC3 (by absolute loading)
-for pc in ['PC1', 'PC2', 'PC3']:
-    if pc in loadings5.columns:
-        s = loadings5[pc]
+# Print top-contributing features for PC1..PC3
+for pc in [f'PC{i}' for i in range(1, min(3, k) + 1)]:
+    if pc in loadings_k.columns:
+        s = loadings_k[pc]
         top = s.abs().sort_values(ascending=False).head(5).index.tolist()
-        print(f"Top contributors to {pc} (by |loading|): {', '.join(top)}")
-
-# 3) Clarify feature spaces for downstream modeling
-X_pca5 = X_5.copy()
-print(f"Feature spaces ready -> X_std shape: {X_std.shape}, X_pca5 shape: {X_pca5.shape}")
+        print(f'Top contributors to {pc} (by |loading|): {", ".join(top)}')
 #=======================================================================================================================
 
 #=======================================================================================================================
-# Feature matrices for ML: x_original (standardized 12-D) and x_pca5 (PC1..PC5)
-import pandas as pd
+# Feature matrices for ML: original standardized 12-D space and PCA-k space
+# Create DataFrames for downstream ML usage (PyCaret)
+x_train_original = X_train_std_df.copy()
+x_test_original = X_test_std_df.copy()
+x_train_pca = X_train_pca.copy()
+x_test_pca = X_test_pca.copy()
 
-# Guards to ensure prerequisites exist
-needed = []
-for name in ['X_std', 'X_12']:
-    if name not in globals():
-        needed.append(name)
-if needed:
-    raise RuntimeError(f"Missing required objects: {needed}. Run the Standardization and PCA cells first.")
+# Also provide labeled DataFrames convenient for PyCaret setup()
+train_original_with_y = x_train_original.copy()
+train_original_with_y['quality_label'] = y_train.values
 
-# Ensure X_pca5 exists (fallback to X_5 if defined)
-if 'X_pca5' not in globals():
-    if 'X_5' in globals():
-        X_pca5 = X_5.copy()
-    else:
-        raise RuntimeError('X_pca5 not found and X_5 unavailable. Run the PCA reduction cell first.')
+test_original_with_y = x_test_original.copy()
+test_original_with_y['quality_label'] = y_test.values
 
-# Create DataFrames for downstream ML usage
-x_original = pd.DataFrame(X_std, columns=list(X_12.columns))  # standardized 12-D features
-x_pca5 = X_pca5.copy()  # 5 principal components (PC1..PC5)
+train_pca_with_y = x_train_pca.copy()
+train_pca_with_y['quality_label'] = y_train.values
 
-print(f"Prepared matrices -> x_original: {x_original.shape}, x_pca5: {x_pca5.shape}")
+test_pca_with_y = x_test_pca.copy()
+test_pca_with_y['quality_label'] = y_test.values
+
+print(f'Prepared matrices -> x_train_original: {x_train_original.shape}, x_test_original: {x_test_original.shape}')
+print(f'Prepared matrices -> x_train_pca: {x_train_pca.shape}, x_test_pca: {x_test_pca.shape}')
 #=======================================================================================================================

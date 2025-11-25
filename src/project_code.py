@@ -13,6 +13,9 @@ from pca import pca
 pd.set_option('display.max_columns', None)
 plt.rcParams['figure.figsize'] = (7, 5)
 
+# Global color palette for binary quality label (0=low, 1=high)
+QUALITY_LABEL_PALETTE = {0: '#ff7f0e', 1: '#1f77b4'}
+
 # Resolve raw and clean paths robustly relative to working directory
 RAW_CANDIDATES = [
     os.path.join('../data', 'koi.csv'),
@@ -255,8 +258,19 @@ plt.show()
 
 # 2) Pairplot to visualize bivariate relations between attributes (sampled for efficiency)
 sample_size = min(1000, len(X_12))
-X_pair = X_12.sample(n=sample_size, random_state=6220)
-sns.pairplot(X_pair, corner=True, diag_kind='hist', plot_kws={'s': 10, 'alpha': 0.4})
+sample_idx = X_12.sample(n=sample_size, random_state=6220).index
+pair_df = X_12.loc[sample_idx].copy()
+pair_df['quality_label'] = df_labeled.loc[sample_idx, 'quality_label'].astype(int)
+
+sns.pairplot(
+    pair_df,
+    vars=X_12.columns.tolist(),
+    hue='quality_label',
+    corner=True,
+    diag_kind='hist',
+    palette=QUALITY_LABEL_PALETTE,
+    plot_kws={'s': 12, 'alpha': 0.5},
+)
 plt.suptitle('Pairwise relationships of transformed features (sample)', y=1.02)
 plt.tight_layout()
 plt.show()
@@ -328,10 +342,27 @@ formatters = {
 print('Eigenvalues and explained variance (PCA on training set):')
 print(ev_table.to_string(formatters=formatters))
 
-# Loadings matrix (features x PCs)
-loadings = pca_model.results['loadings']
-print('\nLoadings matrix A (first 5 PCs):')
-print(loadings.iloc[:, :5].to_string(float_format=lambda x: f'{x:.4f}'))
+# Loadings matrix from pca (orientation may differ by version)
+loadings_raw = pca_model.results['loadings']
+
+# Normalize orientation: ensure rows are PCs and columns are original features
+idx_str = [str(v) for v in loadings_raw.index]
+col_str = [str(v) for v in loadings_raw.columns]
+has_pc_in_index = any(s.startswith('PC') for s in idx_str)
+has_pc_in_cols = any(s.startswith('PC') for s in col_str)
+
+if has_pc_in_index and not has_pc_in_cols:
+    # Rows are PCs, columns are features (desired orientation)
+    loadings_pc = loadings_raw.copy()
+elif has_pc_in_cols and not has_pc_in_index:
+    # Columns are PCs, rows are features -> transpose
+    loadings_pc = loadings_raw.T.copy()
+else:
+    # Ambiguous; fall back to treating columns as PCs
+    loadings_pc = loadings_raw.T.copy()
+
+print('\nLoadings matrix A (first 5 PCs, rows=PCs, columns=features):')
+print(loadings_pc.iloc[: min(5, loadings_pc.shape[0]), :].to_string(float_format=lambda x: f'{x:.4f}'))
 
 # Choose number of PCs to retain (k) to reach at least ~80% cumulative variance
 k_default = np.searchsorted(cum_var, 0.80) + 1
@@ -402,7 +433,7 @@ ax = sns.scatterplot(
     x='PC1',
     y='PC2',
     hue='quality_label',
-    palette={0: '#ff7f0e', 1: '#1f77b4'},
+    palette=QUALITY_LABEL_PALETTE,
     alpha=0.7,
     s=25,
 )
@@ -412,11 +443,29 @@ ax.grid(True, linestyle=':', alpha=0.4)
 plt.tight_layout()
 plt.show()
 
-# 2) Loadings heatmap for first k PCs
-loadings_k = loadings.iloc[:, :k].copy()
+# 2) Loadings heatmap for first k PCs (rows=features, columns=PCs)
+if 'loadings_pc' not in globals():
+    if 'pca_model' not in globals():
+        raise RuntimeError('loadings_pc not found and pca_model missing. Run the PCA cell first.')
+    loadings_raw = pca_model.results['loadings']
+    idx_str = [str(v) for v in loadings_raw.index]
+    col_str = [str(v) for v in loadings_raw.columns]
+    has_pc_in_index = any(s.startswith('PC') for s in idx_str)
+    has_pc_in_cols = any(s.startswith('PC') for s in col_str)
+    if has_pc_in_index and not has_pc_in_cols:
+        loadings_pc = loadings_raw.copy()
+    elif has_pc_in_cols and not has_pc_in_index:
+        loadings_pc = loadings_raw.T.copy()
+    else:
+        loadings_pc = loadings_raw.T.copy()
+
+# loadings_pc: rows = PCs, columns = features
+loadings_k = loadings_pc.iloc[:k, :].copy()        # shape (k, n_features)
+loadings_plot = loadings_k.T                       # shape (n_features, k)
+
 plt.figure(figsize=(8.2, 6.2))
 ax = sns.heatmap(
-    loadings_k,
+    loadings_plot,
     cmap='vlag',
     center=0,
     annot=True,
@@ -424,16 +473,20 @@ ax = sns.heatmap(
     linewidths=0.4,
     cbar_kws=dict(shrink=0.8),
 )
-ax.set_title('Loadings (A): weights of original features on first k PCs')
+ax.set_title('Loadings (A): rows = features, columns = first k PCs')
+ax.set_xlabel('Principal components')
+ax.set_ylabel('Original features')
 plt.tight_layout()
 plt.show()
 
-# Print top-contributing features for PC1..PC3
-for pc in [f'PC{i}' for i in range(1, min(3, k) + 1)]:
-    if pc in loadings_k.columns:
-        s = loadings_k[pc]
-        top = s.abs().sort_values(ascending=False).head(5).index.tolist()
-        print(f'Top contributors to {pc} (by |loading|): {", ".join(top)}')
+# Print top-contributing features for PC1..PC3 (by absolute loading)
+max_pc_to_report = min(3, k)
+for i in range(1, max_pc_to_report + 1):
+    pc_name = f'PC{i}'
+    if pc_name in loadings_k.index:
+        s = loadings_k.loc[pc_name]
+        top_features = s.abs().sort_values(ascending=False).head(5).index.tolist()
+        print(f'Top contributors to {pc_name} (by |loading|): {", ".join(top_features)}')
 #=======================================================================================================================
 
 #=======================================================================================================================

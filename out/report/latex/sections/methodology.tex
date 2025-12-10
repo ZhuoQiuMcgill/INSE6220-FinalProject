@@ -1,11 +1,44 @@
-\subsection{Principal Component Analysis}
-Principal Component Analysis (PCA) is applied to standardized numeric features to reduce dimensionality, remove linear dependencies, and obtain orthogonal components. We select the number of components by cumulative explained variance (e.g., retaining the smallest number of components that accounts for a target fraction of variance). PCA facilitates interpretation via loadings---highlighting which original attributes drive each principal component---and can improve conditioning for linear models.
+\subsection{Problem Formulation}
+We formally define the task as a binary classification problem. Let $\mathbf{x} \in \mathbb{R}^{12}$ represent the vector of transformed astrophysical features for a given KOI, and let $y \in \{0, 1\}$ be the corresponding quality label, where $0$ denotes a low-quality candidate (likely false positive) and $1$ denotes a high-quality candidate. Our goal is to learn a mapping $f: \mathbb{R}^{12} \to \{0, 1\}$ that minimizes the classification error on unseen data. The labels are derived from the continuous variable $\texttt{koi\_score} \in [0, 1]$ using a thresholding function:
+\begin{equation}
+    y_i = \begin{cases} 
+      1 & \text{if } \texttt{koi\_score}_i > 0.7 \\
+      0 & \text{if } \texttt{koi\_score}_i < 0.3 \\
+      \text{undefined} & \text{otherwise}
+   \end{cases}
+\end{equation}
+Samples falling in the ambiguous range $[0.3, 0.7]$ are discarded to ensure high label quality.
 
-\subsection{Regression and Machine Learning Models}
-We frame koi\_score prediction as a supervised regression problem. We consider two families of models:
+\subsection{Principal Component Analysis}
+Principal Component Analysis (PCA) is a linear dimensionality reduction technique that projects data onto a lower-dimensional subspace defined by the directions of maximum variance \cite{jolliffe2002pca}. Given the standardized feature matrix $\mathbf{X} \in \mathbb{R}^{N \times D}$, where $N$ is the number of samples and $D=12$ features, PCA computes the covariance matrix $\mathbf{C}$:
+\begin{equation}
+    \mathbf{C} = \frac{1}{N-1}\mathbf{X}^T\mathbf{X}
+\end{equation}
+We then compute the eigenvalues $\lambda_j$ and eigenvectors $\mathbf{v}_j$ of $\mathbf{C}$. The eigenvectors (principal components) define a new orthogonal coordinate system. We project the data onto the top $k$ components corresponding to the largest eigenvalues. We select $k=4$ to satisfy a cumulative explained variance threshold of $\ge 80\%$, balancing information retention with dimensionality reduction.
+
+\subsection{Classification Models}
+We employ three distinct classifier families to capture different aspects of the data structure.
+
+\subsubsection{Logistic Regression (LR)}
+A linear model that estimates the probability of the positive class using the sigmoid function $\sigma(z) = \frac{1}{1+e^{-z}}$, where $z = \mathbf{w}^T\mathbf{x} + b$. It provides a strong baseline for linearly separable data and offers interpretability through coefficient analysis. We optimize the weights $\mathbf{w}$ by minimizing the binary cross-entropy loss.
+
+\subsubsection{Random Forest (RF)}
+An ensemble learning method that constructs a multitude of decision trees during training. For classification, it outputs the mode of the classes predicted by individual trees. Random Forests are robust to overfitting and can naturally handle nonlinear interactions between features. We utilize the Gini impurity criterion for splitting nodes and evaluate feature importance by measuring the mean decrease in impurity.
+
+\subsubsection{Multilayer Perceptron (MLP)}
+A feedforward artificial neural network consisting of an input layer, one or more hidden layers, and an output layer. MLPs can approximate any continuous function given sufficient hidden units \cite{goodfellow2016deep}. We implement an architecture with:
 \begin{itemize}
-  \item \textbf{Linear Regression}: a simple baseline that benefits from PCA when multicollinearity is present.
-  \item \textbf{Multilayer Perceptron (MLP)}: a feedforward neural network that can model non-linear relationships. We tune depth, width, activation functions, and regularization.
+    \item \textbf{Input Layer:} 12 neurons (original) or 4 neurons (PCA).
+    \item \textbf{Hidden Layers:} Two layers with 100 and 50 neurons respectively, using Rectified Linear Unit (ReLU) activation functions ($f(x) = \max(0, x)$).
+    \item \textbf{Output Layer:} Single neuron with sigmoid activation for binary probability.
+    \item \textbf{Optimization:} Adam optimizer with an adaptive learning rate and L2 regularization (weight decay) to prevent overfitting.
 \end{itemize}
 
-We evaluate two feature pipelines for each model: (i) original standardized features and (ii) PCA components. Data are split into training and test partitions (e.g., 80/20) with a fixed random seed. Where appropriate, cross-validation on the training set guides hyperparameter choices. Performance is measured with R$^2$, MSE, RMSE, and MAE. We also examine residuals and predicted-versus-true plots to assess systematic biases across the koi\_score range.
+\subsection{Evaluation Metrics}
+Because the dataset is roughly balanced, we use Accuracy as a primary metric. However, to account for potential costs of false positives versus false negatives in exoplanet vetting, we also report:
+\begin{itemize}
+    \item \textbf{Precision:} $TP / (TP + FP)$. The fraction of claimed candidates that are real.
+    \item \textbf{Recall (Sensitivity):} $TP / (TP + FN)$. The fraction of real candidates successfully recovered.
+    \item \textbf{F1-Score:} $2 \cdot \frac{\text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}$. The harmonic mean of precision and recall.
+    \item \textbf{AUC (Area Under the ROC Curve):} A threshold-independent measure of discriminative ability.
+\end{itemize}

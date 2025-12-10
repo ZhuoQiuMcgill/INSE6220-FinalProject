@@ -1,9 +1,61 @@
-We use the Kepler KOI cumulative table provided by the NASA Exoplanet Archive. The table aggregates KOIs across Kepler data releases and includes target metadata, transit parameters, and vetting outcomes. Our working dataset is derived by:
+\subsection{Dataset Overview}
+We utilize the Kepler Objects of Interest (KOI) cumulative table from the NASA Exoplanet Archive. The dataset initially comprises 7,994 KOIs. Our analysis focuses on 12 key astrophysical and observational features: orbital period (\texttt{koi\_period}), transit duration (\texttt{koi\_duration}), planetary radius (\texttt{koi\_prad}), equilibrium temperature (\texttt{koi\_teq}), insolation flux (\texttt{koi\_insol}), stellar radius (\texttt{koi\_srad}), transit depth (\texttt{koi\_depth}), model signal-to-noise ratio (\texttt{koi\_model\_snr}), impact parameter (\texttt{koi\_impact}), stellar effective temperature (\texttt{koi\_steff}), stellar surface gravity (\texttt{koi\_slogg}), and Kepler magnitude (\texttt{koi\_kepmag}).
+
+The target variable is the continuous \texttt{koi\_score}. To formulate a binary classification problem, we threshold this score to separate clear false positives from likely candidates. We define ``Low Quality'' (class 0) as samples with \texttt{koi\_score} $< 0.3$ and ``High Quality'' (class 1) as samples with \texttt{koi\_score} $> 0.7$, discarding ambiguous samples in between. This process removes 783 ambiguous samples ($\approx 9.8\%$ of the original data), yielding a final labeled dataset of 7,211 samples (3,753 class 0, 3,458 class 1). This strict thresholding ensures that our models are trained on high-confidence labels, minimizing noise in the ground truth.
+
+Figure \ref{fig:koi_dist} illustrates the distribution of the original \texttt{koi\_score}, and Table \ref{tab:summary_stats} summarizes the key statistics.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.45\textwidth]{figures/Distribution_of_KOI_score.png}
+\caption{Histogram of \texttt{koi\_score}. The bimodal nature facilitates binary labeling by thresholding.}
+\label{fig:koi_dist}
+\end{figure}
+
+\begin{table}[htbp]
+\caption{Summary Statistics of \texttt{koi\_score}}
+\begin{center}
+\begin{tabular}{lc}
+\hline
+\textbf{Statistic} & \textbf{Value} \\
+\hline
+Count & 7994 \\
+Mean & 0.484 \\
+Std Dev & 0.477 \\
+Min & 0.000 \\
+25\% & 0.000 \\
+50\% & 0.371 \\
+75\% & 0.999 \\
+Max & 1.000 \\
+\hline
+\end{tabular}
+\end{center}
+\label{tab:summary_stats}
+\end{table}
+
+\subsection{Feature Transformations}
+Many exoplanet features follow power-law distributions or span several orders of magnitude. To improve the performance of linear models and PCA, we apply the following transformations:
 \begin{itemize}
-  \item Selecting physically meaningful attributes such as orbital period, transit depth, transit duration, transit signal-to-noise ratio, and representative stellar parameters (e.g., effective temperature, surface gravity, radius) where available.
-  \item Excluding outcome variables that would leak labels (e.g., koi\_disposition) from the predictor set; the target is koi\_score.
-  \item Handling missing values using simple imputation strategies (e.g., median for continuous features) and removing records with insufficient information after imputation attempts.
-  \item Standardizing numeric features prior to PCA and model training.
+    \item \textbf{Log$_{10}$:} Applied to \texttt{koi\_period}, \texttt{koi\_duration}, \texttt{koi\_prad}, \texttt{koi\_teq}, \texttt{koi\_insol}, \texttt{koi\_srad}.
+    \item \textbf{Log$_{10}(1+x)$:} Applied to \texttt{koi\_depth} and \texttt{koi\_model\_snr} to handle zero-bounded values with wide dynamic ranges.
+    \item \textbf{No Transformation:} Applied to \texttt{koi\_impact}, \texttt{koi\_steff}, \texttt{koi\_slogg}, \texttt{koi\_kepmag}.
 \end{itemize}
 
-We report basic descriptive statistics for the target and predictors (e.g., distributions and ranges) and consider simple correlation checks. Because KOI coverage and completeness can vary by release, we treat all statistics as descriptive rather than definitive. The resulting cleaned dataset balances retention of samples with the need for consistent feature availability across records.
+Figure \ref{fig:transformed_dist} shows the distributions of these features after transformation.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.45\textwidth]{figures/Distribution_of_Transformed_Features.png}
+\caption{Boxplots of the 12 features after logarithmic and linear transformations.}
+\label{fig:transformed_dist}
+\end{figure}
+
+\subsection{Correlation Analysis}
+The transformed features exhibit significant correlations, as shown in Figure \ref{fig:corr_matrix}. For example, planetary radius (\texttt{koi\_prad}) is strongly correlated with transit depth (\texttt{koi\_depth}) and signal-to-noise ratio (\texttt{koi\_model\_snr}). Similarly, stellar parameters like radius and surface gravity show expected physical correlations. These redundancies support the use of PCA to reduce dimensionality while preserving information.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.45\textwidth]{figures/Correlation_Matrix_of_Transformed_Features.png}
+\caption{Correlation matrix of the 12 transformed features.}
+\label{fig:corr_matrix}
+\end{figure}

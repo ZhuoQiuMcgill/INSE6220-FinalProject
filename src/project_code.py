@@ -622,4 +622,516 @@ test_pca_with_y['quality_label'] = y_test.values
 
 print(f'Prepared matrices -> x_train_original: {x_train_original.shape}, x_test_original: {x_test_original.shape}')
 print(f'Prepared matrices -> x_train_pca: {x_train_pca.shape}, x_test_pca: {x_test_pca.shape}')
+
+# Reset indexes and ensure clean column names for PyCaret compatibility
+x_train_original = x_train_original.reset_index(drop=True)
+x_test_original = x_test_original.reset_index(drop=True)
+x_train_pca = x_train_pca.reset_index(drop=True)
+x_test_pca = x_test_pca.reset_index(drop=True)
+
+# Rename PCA columns to simple names (avoid any special characters)
+pca_col_names = [f'PC{i+1}' for i in range(x_train_pca.shape[1])]
+x_train_pca.columns = pca_col_names
+x_test_pca.columns = pca_col_names
+
+# Reset y_train and y_test indexes to match
+y_train_reset = y_train.reset_index(drop=True)
+y_test_reset = y_test.reset_index(drop=True)
+
+# Rebuild labeled DataFrames with reset indexes
+train_original_with_y = x_train_original.copy()
+train_original_with_y['quality_label'] = y_train_reset.values
+
+test_original_with_y = x_test_original.copy()
+test_original_with_y['quality_label'] = y_test_reset.values
+
+train_pca_with_y = x_train_pca.copy()
+train_pca_with_y['quality_label'] = y_train_reset.values
+
+test_pca_with_y = x_test_pca.copy()
+test_pca_with_y['quality_label'] = y_test_reset.values
+
+print(f'PCA column names: {list(x_train_pca.columns)}')
+#=======================================================================================================================
+
+#=======================================================================================================================
+# PyCaret Classification: Original Features Setup and Model Comparison
+# Use PyCaret to benchmark classifiers on the original 12-D standardized features
+from pycaret.classification import setup, compare_models, create_model, tune_model, plot_model, predict_model, pull, get_config
+
+# Setup PyCaret experiment on original features
+print('Setting up PyCaret classification on ORIGINAL features...')
+clf_setup_orig = setup(
+    data=train_original_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+# Compare all available models to get a leaderboard
+print('\nComparing models on ORIGINAL features:')
+best_models_orig = compare_models(n_select=3, sort='F1')
+comparison_orig = pull()
+print(comparison_orig)
+#=======================================================================================================================
+
+#=======================================================================================================================
+# PyCaret Classification: PCA Features Setup and Model Comparison
+# Use PyCaret to benchmark classifiers on PCA-transformed features
+print('\nSetting up PyCaret classification on PCA features...')
+clf_setup_pca = setup(
+    data=train_pca_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+# Compare all available models on PCA features
+print('\nComparing models on PCA features:')
+best_models_pca = compare_models(n_select=3, sort='F1')
+comparison_pca = pull()
+print(comparison_pca)
+#=======================================================================================================================
+
+#=======================================================================================================================
+# Train and Tune Models on Original Features: LR, RF, MLP
+# Focus on the three models specified in FRAMEWORK: Logistic Regression, Random Forest, MLP
+
+# Re-setup for original features (ensure we're in the right experiment context)
+clf_setup_orig = setup(
+    data=train_original_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+print('Training and tuning models on ORIGINAL features...\n')
+
+# Logistic Regression
+print('--- Logistic Regression (Original) ---')
+lr_orig = create_model('lr', verbose=False)
+lr_orig_tuned = tune_model(lr_orig, verbose=False, optimize='F1')
+lr_orig_results = pull()
+print(lr_orig_results.tail(1))
+
+# Random Forest
+print('\n--- Random Forest (Original) ---')
+rf_orig = create_model('rf', verbose=False)
+rf_orig_tuned = tune_model(rf_orig, verbose=False, optimize='F1')
+rf_orig_results = pull()
+print(rf_orig_results.tail(1))
+
+# MLP Classifier
+print('\n--- MLP Classifier (Original) ---')
+mlp_orig = create_model('mlp', verbose=False)
+mlp_orig_tuned = tune_model(mlp_orig, verbose=False, optimize='F1')
+mlp_orig_results = pull()
+print(mlp_orig_results.tail(1))
+
+# Store tuned models for original features
+tuned_models_orig = {
+    'LR': lr_orig_tuned,
+    'RF': rf_orig_tuned,
+    'MLP': mlp_orig_tuned,
+}
+print('\nTuned models on original features stored.')
+#=======================================================================================================================
+
+#=======================================================================================================================
+# Train and Tune Models on PCA Features: LR, RF, MLP
+
+# Re-setup for PCA features
+clf_setup_pca = setup(
+    data=train_pca_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+print('Training and tuning models on PCA features...\n')
+
+# Logistic Regression
+print('--- Logistic Regression (PCA) ---')
+lr_pca = create_model('lr', verbose=False)
+lr_pca_tuned = tune_model(lr_pca, verbose=False, optimize='F1')
+lr_pca_results = pull()
+print(lr_pca_results.tail(1))
+
+# Random Forest
+print('\n--- Random Forest (PCA) ---')
+rf_pca = create_model('rf', verbose=False)
+rf_pca_tuned = tune_model(rf_pca, verbose=False, optimize='F1')
+rf_pca_results = pull()
+print(rf_pca_results.tail(1))
+
+# MLP Classifier
+print('\n--- MLP Classifier (PCA) ---')
+mlp_pca = create_model('mlp', verbose=False)
+mlp_pca_tuned = tune_model(mlp_pca, verbose=False, optimize='F1')
+mlp_pca_results = pull()
+print(mlp_pca_results.tail(1))
+
+# Store tuned models for PCA features
+tuned_models_pca = {
+    'LR': lr_pca_tuned,
+    'RF': rf_pca_tuned,
+    'MLP': mlp_pca_tuned,
+}
+print('\nTuned models on PCA features stored.')
+#=======================================================================================================================
+
+#=======================================================================================================================
+# Confusion Matrices for All Tuned Models
+# Generate confusion matrices for each model on both feature sets
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+# Setup for original features
+clf_setup_orig = setup(
+    data=train_original_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+print('Confusion Matrices - Original Features:')
+fig_cm_orig, axes_cm_orig = plt.subplots(1, 3, figsize=(15, 4))
+
+for idx, (name, model) in enumerate(tuned_models_orig.items()):
+    # Get predictions on holdout set
+    preds = predict_model(model, verbose=False)
+    y_true = preds['quality_label']
+    y_pred = preds['prediction_label']
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Low (0)', 'High (1)'])
+    disp.plot(ax=axes_cm_orig[idx], cmap='Blues', colorbar=False)
+    axes_cm_orig[idx].set_title(f'{name} (Original)')
+
+plt.tight_layout()
+plt.show()
+
+# Setup for PCA features
+clf_setup_pca = setup(
+    data=train_pca_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+print('\nConfusion Matrices - PCA Features:')
+fig_cm_pca, axes_cm_pca = plt.subplots(1, 3, figsize=(15, 4))
+
+for idx, (name, model) in enumerate(tuned_models_pca.items()):
+    # Get predictions on holdout set
+    preds = predict_model(model, verbose=False)
+    y_true = preds['quality_label']
+    y_pred = preds['prediction_label']
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Low (0)', 'High (1)'])
+    disp.plot(ax=axes_cm_pca[idx], cmap='Blues', colorbar=False)
+    axes_cm_pca[idx].set_title(f'{name} (PCA)')
+
+plt.tight_layout()
+plt.show()
+#=======================================================================================================================
+
+#=======================================================================================================================
+# ROC Curves for All Tuned Models
+# Generate ROC curves with AUC for each model on both feature sets
+from sklearn.metrics import roc_curve, auc
+
+# Setup for original features
+clf_setup_orig = setup(
+    data=train_original_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+print('ROC Curves - Original Features:')
+fig_roc_orig, ax_roc_orig = plt.subplots(figsize=(8, 6))
+
+for name, model in tuned_models_orig.items():
+    preds = predict_model(model, verbose=False)
+    y_true = preds['quality_label']
+    y_prob = preds['prediction_score']
+    fpr, tpr, _ = roc_curve(y_true, y_prob)
+    roc_auc = auc(fpr, tpr)
+    ax_roc_orig.plot(fpr, tpr, label=f'{name} (AUC = {roc_auc:.3f})')
+
+ax_roc_orig.plot([0, 1], [0, 1], 'k--', label='Random (AUC = 0.500)')
+ax_roc_orig.set_xlabel('False Positive Rate')
+ax_roc_orig.set_ylabel('True Positive Rate')
+ax_roc_orig.set_title('ROC Curves - Original Features')
+ax_roc_orig.legend(loc='lower right')
+ax_roc_orig.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Setup for PCA features
+clf_setup_pca = setup(
+    data=train_pca_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+print('\nROC Curves - PCA Features:')
+fig_roc_pca, ax_roc_pca = plt.subplots(figsize=(8, 6))
+
+for name, model in tuned_models_pca.items():
+    preds = predict_model(model, verbose=False)
+    y_true = preds['quality_label']
+    y_prob = preds['prediction_score']
+    fpr, tpr, _ = roc_curve(y_true, y_prob)
+    roc_auc = auc(fpr, tpr)
+    ax_roc_pca.plot(fpr, tpr, label=f'{name} (AUC = {roc_auc:.3f})')
+
+ax_roc_pca.plot([0, 1], [0, 1], 'k--', label='Random (AUC = 0.500)')
+ax_roc_pca.set_xlabel('False Positive Rate')
+ax_roc_pca.set_ylabel('True Positive Rate')
+ax_roc_pca.set_title('ROC Curves - PCA Features')
+ax_roc_pca.legend(loc='lower right')
+ax_roc_pca.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+#=======================================================================================================================
+
+#=======================================================================================================================
+# Decision Boundaries on PC1-PC2 Plane
+# Visualize how each model separates the classes in the first two principal components
+from sklearn.inspection import DecisionBoundaryDisplay
+
+# Use only PC1 and PC2 for visualization
+X_train_2d = x_train_pca.iloc[:, :2].values
+X_test_2d = x_test_pca.iloc[:, :2].values
+y_train_arr = y_train_reset.values
+y_test_arr = y_test_reset.values
+
+# Train simple versions of each model on 2D PCA data for decision boundary visualization
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+
+models_2d = {
+    'Logistic Regression': LogisticRegression(random_state=6220, max_iter=1000),
+    'Random Forest': RandomForestClassifier(random_state=6220, n_estimators=100),
+    'MLP': MLPClassifier(random_state=6220, max_iter=1000, hidden_layer_sizes=(50, 25)),
+}
+
+fig_db, axes_db = plt.subplots(1, 3, figsize=(16, 5))
+
+for idx, (name, model) in enumerate(models_2d.items()):
+    model.fit(X_train_2d, y_train_arr)
+    ax = axes_db[idx]
+    
+    # Create decision boundary display
+    DecisionBoundaryDisplay.from_estimator(
+        model,
+        X_train_2d,
+        ax=ax,
+        alpha=0.4,
+        cmap='RdYlBu',
+        response_method='predict_proba' if hasattr(model, 'predict_proba') else 'predict',
+    )
+    
+    # Scatter plot of training data
+    scatter = ax.scatter(
+        X_train_2d[:, 0],
+        X_train_2d[:, 1],
+        c=y_train_arr,
+        cmap='RdYlBu',
+        edgecolors='black',
+        s=20,
+        alpha=0.6,
+    )
+    
+    ax.set_xlabel('PC1')
+    ax.set_ylabel('PC2')
+    ax.set_title(f'Decision Boundary: {name}')
+    
+    # Calculate and display accuracy
+    train_acc = model.score(X_train_2d, y_train_arr)
+    test_acc = model.score(X_test_2d, y_test_arr)
+    ax.text(0.02, 0.98, f'Train Acc: {train_acc:.3f}\nTest Acc: {test_acc:.3f}',
+            transform=ax.transAxes, verticalalignment='top',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+plt.tight_layout()
+plt.suptitle('Decision Boundaries on PC1-PC2 Plane', y=1.02)
+plt.show()
+#=======================================================================================================================
+
+#=======================================================================================================================
+# Model Comparison Summary Table
+# Consolidate all metrics for Original vs PCA across LR, RF, MLP
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+
+# Function to evaluate a PyCaret model on test data
+def evaluate_model_metrics(model, test_data, target_col='quality_label'):
+    """Evaluate model and return key metrics."""
+    predictions = predict_model(model, data=test_data, verbose=False)
+    y_true = predictions[target_col]
+    y_pred = predictions['prediction_label']
+    
+    # Handle prediction_score for AUC (probability of class 1)
+    if 'prediction_score' in predictions.columns:
+        y_prob = predictions['prediction_score']
+    else:
+        y_prob = y_pred  # fallback
+    
+    metrics = {
+        'Accuracy': accuracy_score(y_true, y_pred),
+        'F1': f1_score(y_true, y_pred),
+        'Precision': precision_score(y_true, y_pred),
+        'Recall': recall_score(y_true, y_pred),
+    }
+    
+    # Try to compute AUC if probabilities available
+    try:
+        metrics['AUC'] = roc_auc_score(y_true, y_prob)
+    except:
+        metrics['AUC'] = None
+    
+    return metrics
+
+# Evaluate all models
+print('Evaluating models on test sets...\n')
+
+# Setup for original features evaluation
+clf_setup_orig = setup(
+    data=train_original_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+results_orig = {}
+for name, model in tuned_models_orig.items():
+    results_orig[name] = evaluate_model_metrics(model, test_original_with_y)
+
+# Setup for PCA features evaluation
+clf_setup_pca = setup(
+    data=train_pca_with_y,
+    target='quality_label',
+    session_id=6220,
+    verbose=False,
+    html=False,
+    log_experiment=False,
+)
+
+results_pca = {}
+for name, model in tuned_models_pca.items():
+    results_pca[name] = evaluate_model_metrics(model, test_pca_with_y)
+
+# Build comparison DataFrame
+comparison_data = []
+for name in ['LR', 'RF', 'MLP']:
+    # Original features
+    row_orig = {'Model': name, 'Features': 'Original (12-D)'}
+    row_orig.update(results_orig[name])
+    comparison_data.append(row_orig)
+    
+    # PCA features
+    row_pca = {'Model': name, 'Features': f'PCA ({k} PCs)'}
+    row_pca.update(results_pca[name])
+    comparison_data.append(row_pca)
+
+comparison_df = pd.DataFrame(comparison_data)
+comparison_df = comparison_df[['Model', 'Features', 'Accuracy', 'F1', 'Precision', 'Recall', 'AUC']]
+
+print('='*80)
+print('MODEL COMPARISON SUMMARY (Test Set Performance)')
+print('='*80)
+print(comparison_df.to_string(index=False, float_format=lambda x: f'{x:.4f}' if pd.notna(x) else 'N/A'))
+print('='*80)
+
+# Identify best model
+best_idx = comparison_df['F1'].idxmax()
+best_model_info = comparison_df.loc[best_idx]
+print(f"\nBest Model by F1 Score: {best_model_info['Model']} on {best_model_info['Features']}")
+print(f"  F1 = {best_model_info['F1']:.4f}, Accuracy = {best_model_info['Accuracy']:.4f}, AUC = {best_model_info['AUC']:.4f}")
+#=======================================================================================================================
+
+#=======================================================================================================================
+# Feature Importance Analysis using Random Forest
+# Visualize which features (original or PCs) are most important for classification
+
+print('Feature Importance Analysis...\n')
+
+# --- Feature Importance for Original Features (RF) ---
+# Re-fit RF on original features to get feature importances
+from sklearn.ensemble import RandomForestClassifier as RF_sklearn
+
+rf_orig_for_importance = RF_sklearn(n_estimators=100, random_state=6220)
+rf_orig_for_importance.fit(x_train_original.values, y_train_reset.values)
+
+importances_orig = rf_orig_for_importance.feature_importances_
+feature_names_orig = list(x_train_original.columns)
+
+# Sort by importance
+sorted_idx_orig = np.argsort(importances_orig)[::-1]
+sorted_importances_orig = importances_orig[sorted_idx_orig]
+sorted_features_orig = [feature_names_orig[i] for i in sorted_idx_orig]
+
+fig_imp, axes_imp = plt.subplots(1, 2, figsize=(14, 5))
+
+# Plot original features importance
+axes_imp[0].barh(range(len(sorted_features_orig)), sorted_importances_orig[::-1], color='steelblue')
+axes_imp[0].set_yticks(range(len(sorted_features_orig)))
+axes_imp[0].set_yticklabels(sorted_features_orig[::-1])
+axes_imp[0].set_xlabel('Feature Importance')
+axes_imp[0].set_title('Random Forest Feature Importance\n(Original 12 Features)')
+axes_imp[0].grid(True, axis='x', alpha=0.3)
+
+# --- Feature Importance for PCA Features (RF) ---
+rf_pca_for_importance = RF_sklearn(n_estimators=100, random_state=6220)
+rf_pca_for_importance.fit(x_train_pca.values, y_train_reset.values)
+
+importances_pca = rf_pca_for_importance.feature_importances_
+feature_names_pca = list(x_train_pca.columns)
+
+# Sort by importance
+sorted_idx_pca = np.argsort(importances_pca)[::-1]
+sorted_importances_pca = importances_pca[sorted_idx_pca]
+sorted_features_pca = [feature_names_pca[i] for i in sorted_idx_pca]
+
+# Plot PCA features importance
+axes_imp[1].barh(range(len(sorted_features_pca)), sorted_importances_pca[::-1], color='darkorange')
+axes_imp[1].set_yticks(range(len(sorted_features_pca)))
+axes_imp[1].set_yticklabels(sorted_features_pca[::-1])
+axes_imp[1].set_xlabel('Feature Importance')
+axes_imp[1].set_title(f'Random Forest Feature Importance\n(PCA - {len(feature_names_pca)} Components)')
+axes_imp[1].grid(True, axis='x', alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# Print top features
+print('Top 5 Most Important Original Features:')
+for i in range(min(5, len(sorted_features_orig))):
+    print(f'  {i+1}. {sorted_features_orig[i]}: {sorted_importances_orig[i]:.4f}')
+
+print(f'\nTop 3 Most Important Principal Components:')
+for i in range(min(3, len(sorted_features_pca))):
+    print(f'  {i+1}. {sorted_features_pca[i]}: {sorted_importances_pca[i]:.4f}')
+
+print('\nFeature importance analysis complete.')
 #=======================================================================================================================

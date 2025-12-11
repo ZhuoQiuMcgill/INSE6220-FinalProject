@@ -7,7 +7,7 @@ We formally define the task as a binary classification problem. Let $\mathbf{x} 
       \text{undefined} & \text{otherwise}
    \end{cases}
 \end{equation}
-Samples falling in the ambiguous range $[0.3, 0.7]$ are discarded to ensure high label quality.
+Samples falling in the ambiguous range $[0.3, 0.7]$ are discarded to ensure high label quality. While this reduces the dataset size slightly, it ensures that the models are trained on confident ground-truth labels, avoiding noise from uncertain dispositions.
 
 \subsection{Principal Component Analysis}
 Principal Component Analysis (PCA) is a linear dimensionality reduction technique that projects data onto a lower-dimensional subspace defined by the directions of maximum variance \cite{jolliffe2002pca}. Given the standardized feature matrix $\mathbf{X} \in \mathbb{R}^{N \times D}$, where $N$ is the number of samples and $D=12$ features, PCA computes the covariance matrix $\mathbf{C}$:
@@ -17,22 +17,22 @@ Principal Component Analysis (PCA) is a linear dimensionality reduction techniqu
 We then compute the eigenvalues $\lambda_j$ and eigenvectors $\mathbf{v}_j$ of $\mathbf{C}$. The eigenvectors (principal components) define a new orthogonal coordinate system. We project the data onto the top $k$ components corresponding to the largest eigenvalues. We select $k=4$ to satisfy a cumulative explained variance threshold of $\ge 80\%$, balancing information retention with dimensionality reduction.
 
 \subsection{Classification Models}
-We employ three distinct classifier families to capture different aspects of the data structure:
-
-\subsubsection{Logistic Regression (LR)}
-A linear model that estimates the probability of the positive class using the logistic function $\sigma(z) = \frac{1}{1+e^{-z}}$ \cite{kleinbaum2002logistic}. It provides a baseline for linearly separable data and offers interpretability through coefficient analysis. We optimize the weights $\mathbf{w}$ by minimizing the binary cross-entropy loss.
+We employ several classifier families and select the top performers from an initial screening stage. In the final experiments we focus on gradient boosting and ensemble/tree-based methods, complemented by a distance-based baseline (KNN):
 
 \subsubsection{Random Forest (RF)}
-An ensemble learning method that constructs a multitude of decision trees during training \cite{breiman2001randomforest}. It handles nonlinear interactions between features effectively and is robust to outliers. We use it to assess the importance of original features and to capture complex boundaries that linear models might miss. We utilize the Gini impurity criterion for splitting nodes and evaluate feature importance by measuring the mean decrease in impurity.
+An ensemble learning method that constructs a multitude of decision trees during training \cite{breiman2001random}. It handles nonlinear interactions between features effectively and is robust to outliers. We use it to assess the importance of original features and to capture complex boundaries that linear models might miss. We utilize the Gini impurity criterion for splitting nodes and evaluate feature importance by measuring the mean decrease in impurity.
 
-\subsubsection{Multilayer Perceptron (MLP)}
-A feedforward artificial neural network consisting of an input layer, one or more hidden layers, and an output layer. MLPs can approximate any continuous function given sufficient hidden units \cite{goodfellow2016deep}. We implement an architecture with:
-\begin{itemize}
-    \item \textbf{Input Layer:} 12 neurons (original) or 4 neurons (PCA).
-    \item \textbf{Hidden Layers:} Two layers with 100 and 50 neurons respectively, using Rectified Linear Unit (ReLU) activation functions ($f(x) = \max(0, x)$).
-    \item \textbf{Output Layer:} Single neuron with sigmoid activation for binary probability.
-    \item \textbf{Optimization:} Adam optimizer with an adaptive learning rate and L2 regularization (weight decay) to prevent overfitting.
-\end{itemize}
+\subsubsection{Light Gradient Boosting Machine (LightGBM)}
+A gradient boosting framework that uses tree-based learning algorithms \cite{lightgbm}. Unlike traditional boosting, LightGBM grows trees leaf-wise rather than level-wise, often resulting in lower loss and faster training. It was included in the final analysis due to its superior performance in preliminary benchmarks.
+
+\subsubsection{Gradient Boosting Classifier (GBC)}
+A classical gradient boosting ensemble that builds an additive model of shallow decision trees in a stage-wise fashion. It provides a strong nonlinear baseline and is competitive on tabular data.
+
+\subsubsection{Extra Trees (ET)}
+An ensemble of randomized decision trees similar to Random Forest, but with additional randomization in split selection. This can reduce variance and often performs well on noisy tabular features.
+
+\subsubsection{K-Nearest Neighbors (KNN)}
+A non-parametric, distance-based classifier that predicts labels based on the majority class among the $k$ nearest points in feature space. KNN benefits from standardized inputs and serves as a simple baseline for local neighborhood structure.
 
 \subsection{Evaluation Metrics}
 Because the dataset is roughly balanced, we use Accuracy as a primary metric. However, to account for potential costs of false positives versus false negatives in exoplanet vetting, we also report:

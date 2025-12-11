@@ -1,13 +1,16 @@
 \subsection{Dataset Overview}
 We utilize the Kepler Objects of Interest (KOI) cumulative table from the NASA Exoplanet Archive. The dataset initially comprises 7,994 KOIs. Our analysis focuses on 12 key astrophysical and observational features: orbital period (\texttt{koi\_period}), transit duration (\texttt{koi\_duration}), planetary radius (\texttt{koi\_prad}), equilibrium temperature (\texttt{koi\_teq}), insolation flux (\texttt{koi\_insol}), stellar radius (\texttt{koi\_srad}), transit depth (\texttt{koi\_depth}), model signal-to-noise ratio (\texttt{koi\_model\_snr}), impact parameter (\texttt{koi\_impact}), stellar effective temperature (\texttt{koi\_steff}), stellar surface gravity (\texttt{koi\_slogg}), and Kepler magnitude (\texttt{koi\_kepmag}).
 
-The target variable is the continuous \texttt{koi\_score}. To formulate a binary classification problem, we threshold this score to separate clear false positives from likely candidates. We define ``Low Quality'' (class 0) as samples with \texttt{koi\_score} $< 0.3$ and ``High Quality'' (class 1) as samples with \texttt{koi\_score} $> 0.7$, discarding ambiguous samples in between. This process removes 783 ambiguous samples ($\approx 9.8\%$ of the original data), yielding a final labeled dataset of 7,211 samples (3,753 class 0, 3,458 class 1). This strict thresholding ensures that our models are trained on high-confidence labels, minimizing noise in the ground truth.
+The target variable is the continuous \texttt{koi\_score}. To formulate a binary classification problem, we threshold this score to separate clear false positives from likely candidates. We define ``Low Quality'' (class 0) as samples with \texttt{koi\_score} $< 0.3$ and ``High Quality'' (class 1) as samples with \texttt{koi\_score} $> 0.7$, discarding ambiguous samples in between. This process removes 259 ambiguous samples ($\approx 3.2\%$ of the original data), yielding a final labeled dataset of 7,735 samples (3,948 class 0, 3,787 class 1). This strict thresholding ensures that our models are trained on high-confidence labels, minimizing noise in the ground truth.
+
+\subsection{Data Cleaning and Missing-Value Handling}
+Prior to modeling, we perform basic data cleaning to ensure a consistent feature table. We coerce the selected columns to numeric types when appropriate, drop rows with missing \texttt{koi\_score}, and filter the target to the valid range $[0,1]$. Because the downstream pipeline requires a complete 12-feature vector, we drop any rows missing one or more of the selected feature columns. We do not apply explicit outlier removal beyond the stabilizing log/log1p transformations described below.
 
 Figure \ref{fig:koi_dist} illustrates the distribution of the original \texttt{koi\_score}, and Table \ref{tab:summary_stats} summarizes the key statistics.
 
-\begin{figure}[htbp]
+\begin{figure}[t!]
 \centering
-\includegraphics[width=0.45\textwidth]{figures/Distribution_of_KOI_score.png}
+\includegraphics[width=0.45\textwidth]{figures/Distribution_of_KOI_score.pdf}
 \caption{Histogram of \texttt{koi\_score}. The bimodal nature facilitates binary labeling by thresholding.}
 \label{fig:koi_dist}
 \end{figure}
@@ -43,9 +46,9 @@ Many exoplanet features follow power-law distributions or span several orders of
 
 Figure \ref{fig:transformed_dist} shows the distributions of these features after transformation.
 
-\begin{figure}[htbp]
+\begin{figure}[b!]
 \centering
-\includegraphics[width=0.45\textwidth]{figures/Distribution_of_Transformed_Features.png}
+\includegraphics[width=0.45\textwidth]{figures/Distribution_of_Transformed_Features.pdf}
 \caption{Boxplots of the 12 features after logarithmic and linear transformations.}
 \label{fig:transformed_dist}
 \end{figure}
@@ -55,7 +58,7 @@ The transformed features exhibit significant correlations, as shown in Figure \r
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.45\textwidth]{figures/Correlation_Matrix_of_Transformed_Features.png}
+\includegraphics[width=0.45\textwidth]{figures/Correlation_Matrix_of_Transformed Features.pdf}
 \caption{Correlation matrix of the 12 transformed features.}
 \label{fig:corr_matrix}
 \end{figure}

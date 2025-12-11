@@ -3,15 +3,15 @@ This study aimed to determine whether the reliability of Kepler Objects of Inter
 \begin{itemize}
     \item Principal Component Analysis is effective for exploring the physical structure of the KOI data, with the first three components explaining $\approx 73.5\%$ of the variance.
     \item While PCA simplifies the feature space, it discards information critical for high-accuracy classification. Models trained on the original 12-dimensional feature set consistently outperformed those trained on the 4-dimensional PCA projection.
-    \item Non-linear classifiers, specifically the Multilayer Perceptron and Random Forest, achieved strong performance with test accuracies of $\approx 89\%$ and F1-scores of $\approx 0.89$, significantly outperforming linear baselines.
+    \item Gradient boosting classifiers, specifically LightGBM, achieved strong performance with test accuracies of $\approx 88.4\%$ and F1-scores of $\approx 0.88$, outperforming simpler baselines such as KNN.
 \end{itemize}
-We conclude that a data-driven surrogate model, particularly an MLP, can effectively approximate the complex vetting decisions of the Kepler pipeline using only high-level catalog parameters, offering a practical tool for rapid candidate prioritization.
+We conclude that a data-driven surrogate model, particularly LightGBM, can approximate Robovetter scoring behavior on \texttt{koi\_score} extremes using only high-level catalog parameters, achieving $\approx 88\%$ test accuracy on a held-out split.
 
 \subsection{Future Work}
 To further improve the robustness and utility of this approach, we propose the following directions:
 \begin{itemize}
-    \item \textbf{Calibration Analysis:} Investigate the discrepancy between cross-validation AUC and test set ROC curves to ensuring the model's probability estimates are well-calibrated.
-    \item \textbf{Advanced Ensembling:} Explore modern gradient boosting frameworks (e.g., XGBoost \cite{xgboost}, CatBoost \cite{catboost}) and stacking ensembles to push classification accuracy beyond the 90\% threshold.
+    \item \textbf{Deep Learning on Light Curves:} Extending beyond catalog-level summary statistics, deep learning models (e.g., 1D-CNNs or Recurrent Neural Networks) could be applied directly to raw light curves and centroid time-series to better approximate the full Kepler vetting pipeline.
+    \item \textbf{Ensemble Stacking:} Combining predictions from heterogeneous models (e.g., LightGBM, Random Forest, and KNN) via a meta-learner could potentially push classification accuracy beyond the 90\% threshold.
     \item \textbf{Cost-Sensitive Learning:} Implement cost-sensitive training to explicitly penalize false positives (classifying a false alarm as a candidate) or false negatives (missing a real planet), depending on the specific scientific goal (purity vs. completeness).
     \item \textbf{Feature Engineering:} Incorporate time-series features extracted directly from light curves or centroid time-series data to better mimic the detailed tests performed by the Robovetter.
 \end{itemize}

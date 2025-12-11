@@ -8,14 +8,17 @@ The data preprocessing and modeling pipeline is implemented in Python using \tex
 \subsection{Cross-Validation and Hyperparameter Tuning}
 We employ 10-fold cross-validation on the training set to evaluate model stability and tune hyperparameters.
 \begin{itemize}
-    \item \textbf{Logistic Regression:} We tune the regularization strength ($C$) and penalty type (L1 vs. L2).
-    \item \textbf{Random Forest:} We optimize the number of trees (n\_estimators), maximum depth, and minimum samples per split to balance bias and variance.
-    \item \textbf{MLP Classifier:} We explore architectures with 1 to 3 hidden layers, varying the number of neurons (e.g., 50-100), activation functions (ReLU, Tanh), and the $\alpha$ parameter for L2 regularization.
+    \item \textbf{LightGBM:} We tune core boosting and tree-structure parameters (e.g., number of estimators, learning rate, and leaf constraints) to optimize F1-score.
+    \item \textbf{Gradient Boosting (GBC):} We tune the number of boosting stages and tree depth-related parameters to balance bias and variance.
+    \item \textbf{Random Forest (RF):} We tune the number of trees (n\_estimators), maximum depth, and minimum samples per split to balance bias and variance.
+    \item \textbf{Extra Trees (ET):} Similar to RF, we tune ensemble size and depth-related parameters; ET increases randomness by using random split thresholds.
+    \item \textbf{K-Nearest Neighbors (KNN):} We tune the number of neighbors and distance weighting to optimize F1-score.
 \end{itemize}
+For completeness, the tuning process searches over model-specific hyperparameters (e.g., learning rate and tree complexity for boosting models, tree depth and sampling parameters for ensembles, and neighborhood size for KNN) and selects configurations that maximize F1-score on cross-validation folds.
 
 \subsection{Model Selection Protocol}
 Our experimental protocol consists of two phases:
 \begin{enumerate}
     \item \textbf{Broad Screening:} We initially compare over 10 different classifiers (including Gradient Boosting, SVM, KNN, etc.) using default hyperparameters to identify top performers on the original 12-dimensional feature set.
-    \item \textbf{Focused Analysis:} Based on the screening results and the need for interpretability vs. performance trade-offs, we select Logistic Regression (baseline), Random Forest (ensemble/interpretable), and MLP (high capacity) for in-depth analysis. We evaluate these three models on both the original features and the 4-component PCA space using the held-out test set.
+    \item \textbf{Focused Analysis:} We select the top-performing models from the screening stage (LightGBM, Gradient Boosting, Random Forest, Extra Trees, and KNN). We tune each model using cross-validation (optimizing F1-score) and then evaluate the tuned models on both the original features and the 4-component PCA space using the held-out test set. For interpretability, we emphasize Random Forest feature importance while using LightGBM as the strongest overall performer.
 \end{enumerate}

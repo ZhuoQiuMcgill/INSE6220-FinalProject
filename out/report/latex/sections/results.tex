@@ -1,3 +1,11 @@
+\begin{figure*}[t!]
+\setcounter{figure}{6}
+\centering
+\includegraphics[width=0.9\textwidth]{figures/Decision_Boundaries.png}
+\caption{Decision boundaries of LR, RF, and MLP in the PC1-PC2 latent space.}
+\label{fig:decision_boundaries}
+\end{figure*}
+
 \subsection{Principal Component Analysis}
 The eigenvalue decomposition of the standardized feature covariance matrix reveals that the effective dimensionality of the data is significantly lower than 12. As shown in Table \ref{tab:pca_variance}, the first three principal components (PCs) explain 73.49\% of the total variance, and the first four explain 81.78\%. This justifies our choice of $k=4$ for the reduced dimensionality experiments, as we retain over 80\% of the signal while reducing the feature count by two-thirds.
 
@@ -21,14 +29,16 @@ PC5 & 0.927 & 7.72 & 89.50 \\
 
 The Scree Plot (Figure \ref{fig:scree_plot}) and Pareto Plot (Figure \ref{fig:pareto_plot}) confirm this trend, with a distinct "elbow" appearing after the third component.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
+\setcounter{figure}{3}
 \centering
 \includegraphics[width=0.45\textwidth]{figures/ScreePlot.png}
 \caption{Scree Plot showing eigenvalues for each principal component.}
 \label{fig:scree_plot}
 \end{figure}
 
-\begin{figure}[htbp]
+\begin{figure}[H]
+\setcounter{figure}{4}
 \centering
 \includegraphics[width=0.45\textwidth]{figures/ParetoPlot.png}
 \caption{Pareto plot of explained variance. The dashed line marks the 80\% threshold, achieved by 4 PCs.}
@@ -42,7 +52,8 @@ Analysis of the factor loadings (Figure \ref{fig:biplot}) allows us to interpret
     \item \textbf{PC3 (17.6\%):} A mix of orbital characteristics and stellar properties (\texttt{koi\_period}, \texttt{koi\_slogg}).
 \end{itemize}
 
-\begin{figure}[htbp]
+\begin{figure}[H]
+\setcounter{figure}{5}
 \centering
 \includegraphics[width=0.45\textwidth]{figures/PCA_Biplot.png}
 \caption{PCA Biplot showing the first two principal components. Vectors indicate the direction and strength of feature contributions.}
@@ -94,6 +105,14 @@ MLP & PCA (4 PCs) & 0.8129 & 0.8049 \\
 \label{tab:test_performance}
 \end{table}
 
+\begin{figure*}[t!]
+\setcounter{figure}{7}
+\centering
+\includegraphics[width=0.9\textwidth]{figures/Confusion_Matrix_Original.png}
+\caption{Confusion Matrices for Logistic Regression, Random Forest, and MLP on the test set (Original Features).}
+\label{fig:confusion_matrices}
+\end{figure*}
+
 \subsection{Model Diagnostics: Confusion Matrices and ROC}
 To better understand the error modes of our models, we examine the confusion matrices for the three selected classifiers on the original feature set (Figure \ref{fig:confusion_matrices}).
 \begin{itemize}
@@ -101,16 +120,10 @@ To better understand the error modes of our models, we examine the confusion mat
     \item \textbf{Logistic Regression} (top) struggles significantly more, with a higher rate of misclassification for both classes, reflecting its inability to model non-linear boundaries.
 \end{itemize}
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.45\textwidth]{figures/Confusion_Matrix_Original.png}
-\caption{Confusion Matrices for Logistic Regression, Random Forest, and MLP on the test set (Original Features).}
-\label{fig:confusion_matrices}
-\end{figure}
-
 The ROC curves in Figure \ref{fig:roc_original} provide further insight into the trade-off between sensitivity and specificity. The MLP and Random Forest curves hug the top-left corner more closely than Logistic Regression, confirming their superior discriminative power across different decision thresholds.
 
 \begin{figure}[htbp]
+\setcounter{figure}{8}
 \centering
 \includegraphics[width=0.45\textwidth]{figures/ROC_Curve_Original.png}
 \caption{ROC Curves for the models trained on original features.}
@@ -118,18 +131,12 @@ The ROC curves in Figure \ref{fig:roc_original} provide further insight into the
 \end{figure}
 
 \subsection{Decision Boundaries and Feature Importance}
-Figure \ref{fig:decision_boundaries} visualizes the decision boundaries of the three models in the PC1-PC2 plane. The Logistic Regression boundary is linear and fails to capture the central cluster of high-quality candidates efficiently. In contrast, the Random Forest and MLP models learn non-linear boundaries that better encircle the target class.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.45\textwidth]{figures/Decision_Boundaries.png}
-\caption{Decision boundaries of LR, RF, and MLP in the PC1-PC2 latent space.}
-\label{fig:decision_boundaries}
-\end{figure}
+The decision boundaries of the three models in the PC1-PC2 plane are visualized in Figure \ref{fig:decision_boundaries}. The Logistic Regression boundary is linear and fails to capture the central cluster of high-quality candidates efficiently. In contrast, the Random Forest and MLP models learn non-linear boundaries that better encircle the target class.
 
 Feature importance analysis from the Random Forest model (Figure \ref{fig:feat_imp}) confirms that planetary radius (\texttt{koi\_prad}) is the most critical predictor, followed by transit depth and period. This aligns with physical intuition: larger planets with deeper, clearer transits are easier to confirm.
 
 \begin{figure}[htbp]
+\setcounter{figure}{9}
 \centering
 \includegraphics[width=0.45\textwidth]{figures/RF_Feature_Importance_Original.png}
 \caption{Random Forest feature importance (Original Features).}

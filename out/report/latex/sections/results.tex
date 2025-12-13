@@ -81,10 +81,28 @@ K Neighbors & 0.8601 & 0.9147 & 0.8902 & 0.8357 & 0.8619 \\
 \label{tab:model_comparison}
 \end{table}
 
-When trained on the 4-PC subset, performance generally decreased. In 10-fold cross-validation, LightGBM accuracy dropped to $\approx 80.5\%$ and Random Forest to $\approx 80.3\%$ on the PCA features, indicating that while the first 4 PCs capture most variance, the remaining 20\% contains fine-grained information useful for classification.
+When trained on the 4-PC subset, performance generally decreased. Table \ref{tab:model_comparison_pca} summarizes the corresponding 10-fold cross-validation results on the PCA feature set. In this setting, LightGBM accuracy drops to $\approx 80.5\%$ and Random Forest to $\approx 80.3\%$, indicating that while the first 4 PCs capture most variance, the remaining 20\% contains fine-grained information useful for classification.
+
+\begin{table}[htbp]
+\caption{Top Model Performance (PCA Features, 4 PCs)}
+\begin{center}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Model} & \textbf{Accuracy} & \textbf{AUC} & \textbf{Recall} & \textbf{Prec.} & \textbf{F1} \\
+\hline
+LightGBM & 0.8047 & 0.8774 & 0.8364 & 0.7810 & 0.8075 \\
+Gradient Boosting & 0.8010 & 0.8694 & 0.8369 & 0.7756 & 0.8047 \\
+Random Forest & 0.8026 & 0.8750 & 0.8157 & 0.7897 & 0.8019 \\
+Extra Trees & 0.7994 & 0.8740 & 0.8157 & 0.7845 & 0.7994 \\
+K Neighbors & 0.7945 & 0.8578 & 0.8076 & 0.7810 & 0.7938 \\
+\hline
+\end{tabular}
+\end{center}
+\label{tab:model_comparison_pca}
+\end{table}
 
 \subsection{Test Set Performance}
-Table \ref{tab:test_performance} presents the final evaluation of our selected models on the held-out test set. LightGBM trained on original features achieved the highest overall performance, with an F1-score of 0.8834.
+Table \ref{tab:test_performance} presents the final evaluation of our selected models on the held-out test set (20\% split; 1,547 examples), reported for both the original 12-dimensional features and the PCA-reduced representation (4 PCs). LightGBM trained on original features achieved the highest overall performance, with an F1-score of 0.8834.
 
 \begin{table}[htbp]
 \caption{Final Test Set Performance}
@@ -95,10 +113,14 @@ Table \ref{tab:test_performance} presents the final evaluation of our selected m
 \hline
 \textbf{LightGBM} & \textbf{Original (12-D)} & \textbf{0.8836} & \textbf{0.8834} & \textbf{0.9413} \\
 LightGBM & PCA (4 PCs) & 0.7957 & 0.8000 & 0.8621 \\
+Gradient Boosting & Original (12-D) & 0.8830 & 0.8830 & 0.9422 \\
+Gradient Boosting & PCA (4 PCs) & 0.7983 & 0.8033 & 0.8655 \\
 Random Forest & Original (12-D) & 0.8707 & 0.8701 & 0.9387 \\
 Random Forest & PCA (4 PCs) & 0.7951 & 0.8037 & 0.8634 \\
 Extra Trees & Original (12-D) & 0.8694 & 0.8700 & 0.9361 \\
+Extra Trees & PCA (4 PCs) & 0.7835 & 0.7926 & 0.8524 \\
 KNN & Original (12-D) & 0.8746 & 0.8769 & 0.9237 \\
+KNN & PCA (4 PCs) & 0.8093 & 0.8155 & 0.8745 \\
 \hline
 \end{tabular}
 \end{center}
